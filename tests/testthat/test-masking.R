@@ -1,0 +1,145 @@
+fake_export <- function(dir) {
+  path <- file.path(dir, "study.csv")
+  lines <- c(
+    "StartDate,IPAddress,LocationLatitude,LocationLongitude,PROLIFIC_PID,participantId,comment",
+    "Start Date,IP Address,Location Latitude,Location Longitude,PROLIFIC_PID,participantId,Any comments?",
+    '"{""ImportId"":""startDate""}","{""ImportId"":""ipAddress""}","{""ImportId"":""locationLatitude""}","{""ImportId"":""locationLongitude""}","{""ImportId"":""PROLIFIC_PID""}","{""ImportId"":""participantId""}","{""ImportId"":""QID1_TEXT""}"',
+    "2026-01-01 10:00:00,1.2.3.4,41.3083,-72.9279,5f1a2b3c4d5e6f7a8b9c0d1e,5f1a2b3c4d5e6f7a8b9c0d1e,my id is 5f1a2b3c4d5e6f7a8b9c0d1e",
+    "2026-01-01 11:00:00,5.6.7.8,41.9028,12.4964,aaaaaaaaaaaaaaaaaaaaaaaa,,nice study",
+    "2026-01-01 12:00:00,1.2.3.4,41.3083,-72.9279,5f1a2b3c4d5e6f7a8b9c0d1e,5f1a2b3c4d5e6f7a8b9c0d1e,"
+  )
+  writeLines(lines, path)
+  path
+}
+
+test_that("codes have the right form and repeat for equal values", {
+  m <- mask_values(c("A1B2C3", "", NA, "A1B2C3", " A1B2C3 ", "XYZ"))
+  expect_match(m[c(1, 4, 6)], "^MSK[A-Za-z0-9]{10}$")
+  expect_equal(m[2:3], c("MSKblank", "MSKblank"))
+  expect_equal(m[1], m[4])
+  expect_equal(m[1], m[5])
+  expect_false(m[1] == m[6])
+})
+
+test_that("a seed makes codes reproducible; no seed does not", {
+  seed <- "a long private phrase for testing"
+  expect_equal(mask_values(c("x1", "y2"), seed = seed), mask_values(c("x1", "y2"), seed = seed))
+  expect_false(identical(mask_values("x1", seed = seed), mask_values("x1", seed = "another long phrase")))
+  expect_false(identical(mask_values(rep("x1", 1)), mask_values(rep("x1", 1))))
+})
+
+test_that("CSV export keeps header rows and masks consistently across columns", {
+  dir <- withr_tempdir()
+  path <- fake_export(dir)
+  res <- mask_qualtrics(path, columns = c("IPAddress", "LocationLatitude", "LocationLongitude",
+                                          "PROLIFIC_PID", "participantId"),
+                        ip = "full", latlon = "full", scan_text = TRUE, mask_text = TRUE)
+  raw <- readLines(res$output)
+  expect_equal(raw[1:3], readLines(path)[1:3])
+  d <- read_qualtrics(res$output)$data
+  expect_equal(d$PROLIFIC_PID[1], d$participantId[1])
+  expect_equal(d$PROLIFIC_PID[1], d$PROLIFIC_PID[3])
+  expect_equal(d$participantId[2], "MSKblank")
+  expect_equal(d$LocationLatitude[1], d$LocationLatitude[3])
+  expect_false(d$LocationLatitude[1] == d$LocationLongitude[1])
+  expect_equal(d$comment[1], paste("my id is", d$PROLIFIC_PID[1]))
+  out <- paste(readLines(res$output), collapse = "\n")
+  expect_false(grepl("5f1a2b3c4d5e6f7a8b9c0d1e|1\\.2\\.3\\.4|41\\.3083", out))
+  report <- readLines(res$report)
+  expect_true(any(grepl(digest::digest(file = res$output, algo = "sha256"), report)))
+  expect_error(mask_qualtrics(path, columns = "IPAddress", ip = "full"), "already exists")
+})
+
+test_that("country_state keeps country and US state", {
+  skip_if_not_installed("maps")
+  skip_if_not_installed("countrycode")
+  expect_equal(latlon_region(c(41.3083, 41.9028, NA), c(-72.9279, 12.4964, 1)),
+               c("USCT", "IT", NA))
+  dir <- withr_tempdir()
+  path <- fake_export(dir)
+  res <- mask_qualtrics(path, columns = c("LocationLatitude", "LocationLongitude"),
+                        latlon = "country_state", scan_text = FALSE)
+  d <- read_qualtrics(res$output)$data
+  expect_match(d$LocationLatitude, "^MSK(USCT|IT)[A-Za-z0-9]{10}$")
+  expect_match(d$LocationLatitude[2], "^MSKIT")
+})
+
+test_that("suggestions find identifier columns by name and content", {
+  d <- data.frame(workerId = "A1B2C3D4E5F6G7", note = "hi", other = "x@y.com",
+                  RecipientEmail = NA, stringsAsFactors = FALSE)
+  s <- suggest_id_columns(d)
+  expect_equal(s$column, c("workerId", "other"))
+  s <- suggest_id_columns(d, include_empty = TRUE)
+  expect_equal(s$column, c("workerId", "other", "RecipientEmail"))
+  expect_equal(s$empty, c(FALSE, FALSE, TRUE))
+})
+
+test_that("list_columns marks empty identifier columns", {
+  dir <- withr_tempdir()
+  path <- file.path(dir, "empty.csv")
+  writeLines(c("StartDate,IPAddress,Q1", "Start Date,IP Address,Question",
+               "2026-01-01,,yes"), path)
+  out <- capture.output(cols <- list_columns(path))
+  expect_true(any(grepl("\\* +2 IPAddress \\(empty\\)", out)))
+  expect_equal(cols$empty, c(FALSE, TRUE, FALSE))
+  expect_error(mask_qualtrics(path, columns = "suggested"), "No identifier")
+})
+
+test_that("SPSS files keep variable labels", {
+  dir <- withr_tempdir()
+  path <- file.path(dir, "s.sav")
+  d <- data.frame(workerId = c("A1B2C3D4E5F6G7", ""), age = c(30, 40))
+  attr(d$workerId, "label") <- "MTurk worker"
+  haven::write_sav(d, path)
+  res <- mask_qualtrics(path, columns = "workerId", scan_text = FALSE)
+  back <- haven::read_sav(res$output)
+  expect_equal(attr(back$workerId, "label"), "MTurk worker")
+  expect_equal(back$workerId[2], "MSKblank")
+  expect_equal(back$age, c(30, 40), ignore_attr = TRUE)
+})
+
+test_that("browser versions are not taken for IP addresses", {
+  d <- data.frame(MetaInfo_Version = c("145.0.0.0", "143.0.0.0"), ip = c("1.2.3.4", "5.6.7.8"))
+  expect_equal(suggest_id_columns(d)$column, "ip")
+  expect_equal(nrow(scan_text(d, "MetaInfo_Version")), 0)
+})
+
+test_that("columns can be given by number or as \"suggested\"", {
+  dir <- withr_tempdir()
+  path <- fake_export(dir)
+  res <- mask_qualtrics(path, columns = c(2, 5), ip = "full", scan_text = FALSE)
+  d <- read_qualtrics(res$output)$data
+  expect_match(d$PROLIFIC_PID, "^MSK")
+  expect_equal(d$LocationLatitude[1], "41.3083")
+  expect_error(mask_qualtrics(path, columns = 99, overwrite = TRUE), "out of range")
+  res <- mask_qualtrics(path, columns = "suggested", ip = "full", latlon = "full",
+                        scan_text = FALSE, overwrite = TRUE)
+  expect_match(read_qualtrics(res$output)$data$participantId[1], "^MSK")
+})
+
+test_that("country of IP addresses comes from a DB-IP file", {
+  dir <- withr_tempdir()
+  db <- file.path(dir, "dbip.csv")
+  writeLines(c("1.2.3.0,1.2.3.255,NA,US,Connecticut,\"New Haven\",41.3,-72.9",
+               "5.6.7.0,5.6.7.255,EU,IT,Lazio,Rome,41.9,12.5",
+               "2001:db8::,2001:db8::ffff,EU,FR,,,0,0"), db)
+  path <- fake_export(dir)
+  res <- mask_qualtrics(path, columns = "IPAddress", ip = "country_state",
+                        ip_db = db, scan_text = FALSE)
+  d <- read_qualtrics(res$output)$data
+  expect_match(d$IPAddress, "^MSK(USCT|IT)[A-Za-z0-9]{10}$")
+  expect_match(d$IPAddress[2], "^MSKIT")
+  expect_error(mask_qualtrics(path, columns = "IPAddress", ip = "country_state",
+                              overwrite = TRUE), "DB-IP")
+})
+
+test_that("ip/latlon are checked, and ignored when there is nothing to apply them to", {
+  dir <- withr_tempdir()
+  path <- fake_export(dir)
+  expect_error(mask_qualtrics(path, columns = "IPAddress", ip = "country"), "must be")
+  expect_error(mask_qualtrics(path, columns = c("LocationLatitude", "LocationLongitude"),
+                              latlon = "everything"), "must be")
+  res <- mask_qualtrics(path, columns = "PROLIFIC_PID", ip = "country_state",
+                        latlon = "country_state", scan_text = FALSE)
+  expect_match(read_qualtrics(res$output)$data$PROLIFIC_PID, "^MSK")
+})

@@ -1,0 +1,31 @@
+Package: qualtricsmasker
+Title: Mask Participant Identifiers in Qualtrics Exports
+Version: 0.1.0
+Authors@R:
+    person("Francesco", "Zanibellato", email = "fz150@georgetown.edu",
+           role = c("aut", "cre"))
+Description: Replaces participant identifiers in Qualtrics survey exports
+    (Prolific, CloudResearch Connect and MTurk IDs, IP addresses, locations,
+    emails) with random codes prefixed by "MSK", so that data can be shared
+    without disclosing identities while repeated participants remain
+    recognizable. Reads and writes CSV, SPSS (.sav) and Excel (.xlsx) exports.
+License: MIT + file LICENSE
+Encoding: UTF-8
+Roxygen: list(markdown = TRUE)
+Imports:
+    digest,
+    haven,
+    openssl,
+    openxlsx,
+    readr,
+    readxl,
+    tools,
+    datasets,
+    stats,
+    utils
+Suggests:
+    countrycode,
+    maps,
+    testthat (>= 3.0.0)
+Config/testthat/edition: 3
+Config/roxygen2/version: 8.1.1
