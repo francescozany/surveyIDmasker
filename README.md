@@ -26,7 +26,7 @@ install.packages(c("maps", "countrycode"))
 
 ```r
 library(surveyIDmasker)
-mask_qualtrics()
+mask_survey()
 ```
 
 That's it. You will be asked to:
@@ -55,7 +55,7 @@ Anything you give as an argument is not asked, so this runs without questions:
 ```r
 list_columns("my_study.sav")     # shows column numbers; * = suggested
 
-mask_qualtrics("my_study.sav",
+mask_survey("my_study.sav",
                columns = c(4, 14, 15, 36),   # numbers, names, or "suggested"
                ip      = "full",             # "full" or "country_state"
                latlon  = "country_state")    # "full" or "country_state"

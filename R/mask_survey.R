@@ -1,4 +1,4 @@
-#' Mask participant identifiers in a Qualtrics export
+#' Mask participant identifiers in a survey export
 #'
 #' Replaces identifiers (Prolific/Connect/MTurk IDs, IP addresses, locations,
 #' emails, ...) with `"MSK"` plus a code made by encrypting the value with a
@@ -50,14 +50,14 @@
 #'   `output`, the `report` and the `key_file`.
 #' @examples
 #' \dontrun{
-#' mask_qualtrics()   # guided
-#' mask_qualtrics("my_study.sav", columns = c(4, 14, 15, 36),
+#' mask_survey()   # guided
+#' mask_survey("my_study.sav", columns = c(4, 14, 15, 36),
 #'                ip = "full", latlon = "country_state")
-#' mask_qualtrics("my_study.csv", columns = "suggested", ip = "country_state",
+#' mask_survey("my_study.csv", columns = "suggested", ip = "country_state",
 #'                latlon = "country_state", ip_db = "dbip-city-lite.csv")
 #' }
 #' @export
-mask_qualtrics <- function(file = NULL, columns = NULL, ip = NULL, latlon = NULL,
+mask_survey <- function(file = NULL, columns = NULL, ip = NULL, latlon = NULL,
                            ip_db = NULL, key_file = NULL,
                            scan_text = TRUE, mask_text = FALSE,
                            output = NULL, overwrite = FALSE,
@@ -316,7 +316,7 @@ write_report <- function(path, input, output, n_rows, columns, ip, latlon,
 
 #' List the columns of a Qualtrics export with their numbers
 #'
-#' Use the numbers in `mask_qualtrics(columns = ...)`. Suggested identifier
+#' Use the numbers in `mask_survey(columns = ...)`. Suggested identifier
 #' columns are marked with `*`; identifier columns with no data also show
 #' `(empty)`.
 #'
@@ -413,5 +413,5 @@ repeat_command <- function(file, columns, ip, latlon, ip_db, key_file, mask_text
             if (!is.null(ip_db)) paste0("ip_db = ", q(ip_db)),
             paste0("key_file = ", q(key_file)),
             if (mask_text) "mask_text = TRUE")
-  paste0("mask_qualtrics(", paste(args, collapse = ", "), ")")
+  paste0("mask_survey(", paste(args, collapse = ", "), ")")
 }

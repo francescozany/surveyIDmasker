@@ -9,7 +9,7 @@ mask_values(x, key_file = NULL, prefix = "MSK")
 \arguments{
 \item{x}{A vector of identifiers.}
 
-\item{key_file}{Path to a key file made by \code{\link[=mask_qualtrics]{mask_qualtrics()}} or
+\item{key_file}{Path to a key file made by \code{\link[=mask_survey]{mask_survey()}} or
 \code{\link[=new_key_file]{new_key_file()}}. If \code{NULL}, a temporary key is used and the codes cannot
 be turned back.}
 

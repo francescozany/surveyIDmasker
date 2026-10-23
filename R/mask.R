@@ -94,7 +94,7 @@ is_blank <- function(x) is.na(x) | trimws(x) == ""
 #' into the original values.
 #'
 #' @param x A vector of identifiers.
-#' @param key_file Path to a key file made by [mask_qualtrics()] or
+#' @param key_file Path to a key file made by [mask_survey()] or
 #'   [new_key_file()]. If `NULL`, a temporary key is used and the codes cannot
 #'   be turned back.
 #' @param prefix Prefix(es) placed before the code, recycled along `x`.

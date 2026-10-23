@@ -17,6 +17,6 @@ Invisibly, the path.
 \description{
 Makes a new random key and saves it as a small text file. Anyone who has
 this file can turn masked codes back into the original identifiers, so keep
-it private and never share it with the data. \code{\link[=mask_qualtrics]{mask_qualtrics()}} creates one
+it private and never share it with the data. \code{\link[=mask_survey]{mask_survey()}} creates one
 automatically; use this only to prepare a key in advance.
 }

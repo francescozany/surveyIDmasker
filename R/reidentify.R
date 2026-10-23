@@ -1,6 +1,6 @@
 #' Turn masked codes back into the original identifiers
 #'
-#' Reads a file masked by [mask_qualtrics()] and, using the private key file,
+#' Reads a file masked by [mask_survey()] and, using the private key file,
 #' replaces every `MSK` code (also inside free text) with the original value.
 #' `MSKblank` becomes an empty cell again. Codes made with a different key are
 #' left as they are. The masked file is not changed; the result is written to

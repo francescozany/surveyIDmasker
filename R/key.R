@@ -10,7 +10,7 @@ derive_key <- function(secret) {
 #'
 #' Makes a new random key and saves it as a small text file. Anyone who has
 #' this file can turn masked codes back into the original identifiers, so keep
-#' it private and never share it with the data. [mask_qualtrics()] creates one
+#' it private and never share it with the data. [mask_survey()] creates one
 #' automatically; use this only to prepare a key in advance.
 #'
 #' @param path Where to save the key file.

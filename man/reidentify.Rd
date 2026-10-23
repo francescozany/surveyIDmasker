@@ -31,7 +31,7 @@ Invisibly, a list with the re-identified \code{data} and the \code{output}
 path.
 }
 \description{
-Reads a file masked by \code{\link[=mask_qualtrics]{mask_qualtrics()}} and, using the private key file,
+Reads a file masked by \code{\link[=mask_survey]{mask_survey()}} and, using the private key file,
 replaces every \code{MSK} code (also inside free text) with the original value.
 \code{MSKblank} becomes an empty cell again. Codes made with a different key are
 left as they are. The masked file is not changed; the result is written to

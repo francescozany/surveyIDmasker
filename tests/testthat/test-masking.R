@@ -36,7 +36,7 @@ test_that("CSV export keeps header rows and masks consistently across columns", 
   local_mocked_bindings(time_stamp = function() "2026-01-01_10-00")
   dir <- withr_tempdir()
   path <- fake_export(dir)
-  res <- mask_qualtrics(path, columns = c("IPAddress", "LocationLatitude", "LocationLongitude",
+  res <- mask_survey(path, columns = c("IPAddress", "LocationLatitude", "LocationLongitude",
                                           "PROLIFIC_PID", "participantId"),
                         ip = "full", latlon = "full", scan_text = TRUE, mask_text = TRUE)
   raw <- readLines(res$output)
@@ -52,7 +52,7 @@ test_that("CSV export keeps header rows and masks consistently across columns", 
   expect_false(grepl("5f1a2b3c4d5e6f7a8b9c0d1e|1\\.2\\.3\\.4|41\\.3083", out))
   report <- readLines(res$report)
   expect_true(any(grepl(digest::digest(file = res$output, algo = "sha256"), report)))
-  expect_error(mask_qualtrics(path, columns = "IPAddress", ip = "full"), "already exists")
+  expect_error(mask_survey(path, columns = "IPAddress", ip = "full"), "already exists")
 })
 
 test_that("country_state keeps country and US state", {
@@ -62,7 +62,7 @@ test_that("country_state keeps country and US state", {
                c("USCT", "IT", NA))
   dir <- withr_tempdir()
   path <- fake_export(dir)
-  res <- mask_qualtrics(path, columns = c("LocationLatitude", "LocationLongitude"),
+  res <- mask_survey(path, columns = c("LocationLatitude", "LocationLongitude"),
                         latlon = "country_state", scan_text = FALSE)
   d <- read_qualtrics(res$output)$data
   expect_match(d$LocationLatitude, "^MSK(USCT|IT)[A-Za-z0-9]{12,}$")
@@ -87,7 +87,7 @@ test_that("list_columns marks empty identifier columns", {
   out <- capture.output(cols <- list_columns(path))
   expect_true(any(grepl("\\* +2 IPAddress \\(empty\\)", out)))
   expect_equal(cols$empty, c(FALSE, TRUE, FALSE))
-  expect_error(mask_qualtrics(path, columns = "suggested"), "No identifier")
+  expect_error(mask_survey(path, columns = "suggested"), "No identifier")
 })
 
 test_that("SPSS files keep variable labels", {
@@ -96,7 +96,7 @@ test_that("SPSS files keep variable labels", {
   d <- data.frame(workerId = c("A1B2C3D4E5F6G7", ""), age = c(30, 40))
   attr(d$workerId, "label") <- "MTurk worker"
   haven::write_sav(d, path)
-  res <- mask_qualtrics(path, columns = "workerId", scan_text = FALSE)
+  res <- mask_survey(path, columns = "workerId", scan_text = FALSE)
   back <- haven::read_sav(res$output)
   expect_equal(attr(back$workerId, "label"), "MTurk worker")
   expect_equal(back$workerId[2], "MSKblank")
@@ -112,12 +112,12 @@ test_that("browser versions are not taken for IP addresses", {
 test_that("columns can be given by number or as \"suggested\"", {
   dir <- withr_tempdir()
   path <- fake_export(dir)
-  res <- mask_qualtrics(path, columns = c(2, 5), ip = "full", scan_text = FALSE)
+  res <- mask_survey(path, columns = c(2, 5), ip = "full", scan_text = FALSE)
   d <- read_qualtrics(res$output)$data
   expect_match(d$PROLIFIC_PID, "^MSK")
   expect_equal(d$LocationLatitude[1], "41.3083")
-  expect_error(mask_qualtrics(path, columns = 99, overwrite = TRUE), "out of range")
-  res <- mask_qualtrics(path, columns = "suggested", ip = "full", latlon = "full",
+  expect_error(mask_survey(path, columns = 99, overwrite = TRUE), "out of range")
+  res <- mask_survey(path, columns = "suggested", ip = "full", latlon = "full",
                         scan_text = FALSE, overwrite = TRUE, key_file = res$key_file)
   expect_match(read_qualtrics(res$output)$data$participantId[1], "^MSK")
 })
@@ -129,22 +129,22 @@ test_that("country of IP addresses comes from a DB-IP file", {
                "5.6.7.0,5.6.7.255,EU,IT,Lazio,Rome,41.9,12.5",
                "2001:db8::,2001:db8::ffff,EU,FR,,,0,0"), db)
   path <- fake_export(dir)
-  res <- mask_qualtrics(path, columns = "IPAddress", ip = "country_state",
+  res <- mask_survey(path, columns = "IPAddress", ip = "country_state",
                         ip_db = db, scan_text = FALSE)
   d <- read_qualtrics(res$output)$data
   expect_match(d$IPAddress, "^MSK(USCT|IT)[A-Za-z0-9]{12,}$")
   expect_match(d$IPAddress[2], "^MSKIT")
-  expect_error(mask_qualtrics(path, columns = "IPAddress", ip = "country_state",
+  expect_error(mask_survey(path, columns = "IPAddress", ip = "country_state",
                               overwrite = TRUE), "DB-IP")
 })
 
 test_that("ip/latlon are checked, and ignored when there is nothing to apply them to", {
   dir <- withr_tempdir()
   path <- fake_export(dir)
-  expect_error(mask_qualtrics(path, columns = "IPAddress", ip = "country"), "must be")
-  expect_error(mask_qualtrics(path, columns = c("LocationLatitude", "LocationLongitude"),
+  expect_error(mask_survey(path, columns = "IPAddress", ip = "country"), "must be")
+  expect_error(mask_survey(path, columns = c("LocationLatitude", "LocationLongitude"),
                               latlon = "everything"), "must be")
-  res <- mask_qualtrics(path, columns = "PROLIFIC_PID", ip = "country_state",
+  res <- mask_survey(path, columns = "PROLIFIC_PID", ip = "country_state",
                         latlon = "country_state", scan_text = FALSE)
   expect_match(read_qualtrics(res$output)$data$PROLIFIC_PID, "^MSK")
 })
@@ -153,7 +153,7 @@ test_that("reidentify restores every original value with the key", {
   local_mocked_bindings(time_stamp = function() "2026-01-01_10-00")
   dir <- withr_tempdir()
   path <- fake_export(dir)
-  res <- mask_qualtrics(path, columns = c("IPAddress", "LocationLatitude", "LocationLongitude",
+  res <- mask_survey(path, columns = c("IPAddress", "LocationLatitude", "LocationLongitude",
                                           "PROLIFIC_PID", "participantId"),
                         ip = "full", latlon = "country_state", mask_text = TRUE)
   expect_match(res$output, "study_masked_2026-01-01_10-00[.]csv$")
@@ -168,10 +168,10 @@ test_that("an existing key is never overwritten, and can be reused", {
   local_mocked_bindings(time_stamp = function() "2026-01-01_10-00")
   dir <- withr_tempdir()
   path <- fake_export(dir)
-  res1 <- mask_qualtrics(path, columns = "PROLIFIC_PID", scan_text = FALSE)
+  res1 <- mask_survey(path, columns = "PROLIFIC_PID", scan_text = FALSE)
   key_before <- readLines(res1$key_file)
-  expect_error(mask_qualtrics(path, columns = "PROLIFIC_PID", overwrite = TRUE), "key file already exists")
-  res2 <- mask_qualtrics(path, columns = "PROLIFIC_PID", overwrite = TRUE,
+  expect_error(mask_survey(path, columns = "PROLIFIC_PID", overwrite = TRUE), "key file already exists")
+  res2 <- mask_survey(path, columns = "PROLIFIC_PID", overwrite = TRUE,
                          key_file = res1$key_file, scan_text = FALSE)
   expect_equal(readLines(res1$key_file), key_before)
   expect_equal(res1$data$PROLIFIC_PID, res2$data$PROLIFIC_PID)
@@ -180,7 +180,7 @@ test_that("an existing key is never overwritten, and can be reused", {
 test_that("a wrong key cannot reidentify", {
   dir <- withr_tempdir()
   path <- fake_export(dir)
-  res <- mask_qualtrics(path, columns = "PROLIFIC_PID", scan_text = FALSE)
+  res <- mask_survey(path, columns = "PROLIFIC_PID", scan_text = FALSE)
   other <- new_key_file(file.path(dir, "other_KEY.txt"))
   expect_error(reidentify(res$output, key_file = other), "None of the codes match")
   expect_error(reidentify(res$output, key_file = path), "does not look like")
@@ -190,9 +190,9 @@ test_that("each run's files get the time it ran", {
   dir <- withr_tempdir()
   path <- fake_export(dir)
   local_mocked_bindings(time_stamp = function() "2026-01-01_10-00")
-  r1 <- mask_qualtrics(path, columns = "PROLIFIC_PID", scan_text = FALSE)
+  r1 <- mask_survey(path, columns = "PROLIFIC_PID", scan_text = FALSE)
   local_mocked_bindings(time_stamp = function() "2026-01-01_10-05")
-  r2 <- mask_qualtrics(path, columns = "PROLIFIC_PID", scan_text = FALSE)
+  r2 <- mask_survey(path, columns = "PROLIFIC_PID", scan_text = FALSE)
   expect_true(all(file.exists(c(r1$output, r1$report, r1$key_file, r2$output, r2$report, r2$key_file))))
   expect_match(r2$key_file, "study_KEY_2026-01-01_10-05[.]txt$")
   expect_false(identical(r1$data$PROLIFIC_PID, r2$data$PROLIFIC_PID))
