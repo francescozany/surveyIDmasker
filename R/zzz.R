@@ -1,6 +1,7 @@
-# How to cite the package. Add the DOI here once there is one.
+# How to cite the package. The DOI is Zenodo's "all versions" DOI, which
+# always resolves to the latest release.
 citation_text <- function() {
-  sprintf("Zanibellato, F. (2026). surveyIDmasker: Mask participant identifiers in survey exports (Version %s).",
+  sprintf("Zanibellato, F. (2026). surveyIDmasker: Mask participant identifiers in survey exports (Version %s). Zenodo. https://doi.org/10.5281/zenodo.23599338",
           utils::packageVersion("surveyIDmasker"))
 }
 

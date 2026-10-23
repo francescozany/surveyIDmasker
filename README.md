@@ -1,5 +1,7 @@
 # surveyIDmasker
 
+[![DOI](https://zenodo.org/badge/DOI/10.5281/zenodo.23599338.svg)](https://doi.org/10.5281/zenodo.23599338)
+
 Mask participant identifiers in survey exports (e.g. Qualtrics) before sharing them.
 
 Prolific, CloudResearch Connect and MTurk IDs, IP addresses, locations and
@@ -83,3 +85,9 @@ After every run, the console prints the one-line command that repeats it.
   emails or IP addresses (participants sometimes type their ID in comments).
   Use `mask_text = TRUE` to replace them as well.
 - Your survey responses never leave your computer.
+
+## Cite
+
+> Zanibellato, F. (2026). *surveyIDmasker: Mask participant identifiers in
+> survey exports* (Version 0.1.0). Zenodo.
+> https://doi.org/10.5281/zenodo.23599338
