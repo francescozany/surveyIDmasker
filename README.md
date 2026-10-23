@@ -2,11 +2,14 @@
 
 [![DOI](https://zenodo.org/badge/DOI/10.5281/zenodo.23599338.svg)](https://doi.org/10.5281/zenodo.23599338)
 
-Mask participant identifiers in survey exports (e.g. Qualtrics) before sharing them.
+Mask participant identifiers in survey exports before sharing them.
+
+**Currently supports Qualtrics exports** (CSV, SPSS `.sav` and Excel `.xlsx`).
+Support for other survey tools is planned.
 
 Prolific, CloudResearch Connect and MTurk IDs, IP addresses, locations and
 emails are replaced with `MSK` plus an encrypted code, for example
-`MSKJQ04U6NUB6dJBSwJy9AaqBx07y`. The same value always gets the same code within the file,
+`MSKBccdxZewIPBZRaFxcnEafypOrWP6dPsTkW2x`. The same value always gets the same code within the file,
 so repeat participants can still be spotted. Blank cells become `MSKblank`.
 
 ## Install
@@ -39,9 +42,11 @@ Nothing is saved until the end.
 
 Files written (the original is never changed):
 
-- `<name>_masked.<ext>`: the file to share;
-- `<name>_masked_report.txt`: what was masked and when;
-- `<name>_KEY.txt`: the private key. **Keep it, never share it.**
+- `<name>_masked_<date>_<time>.<ext>`: the file to share;
+- `<name>_masked_<date>_<time>_report.txt`: what was masked and when;
+- `<name>_KEY_<date>_<time>.txt`: the private key. **Keep it, never share it.**
+
+`<date>_<time>` is when you ran it, e.g. `my_study_masked_2026-10-23_14-53.csv`.
 
 ### In one line (scripts, AI agents)
 
@@ -61,14 +66,15 @@ After every run, the console prints the one-line command that repeats it.
 ## Good to know
 
 - **The key file.** Codes are the identifiers encrypted with a private key,
-  saved as `<name>_KEY.txt` next to your original file. Keep it with the
+  saved as `<name>_KEY_<date>_<time>.txt` next to your original file. Keep it with the
   original data and **never share it**. Without it, nobody can turn the
   codes back into identifiers. With it, you can:
   ```r
-  reidentify("my_study_masked.csv", key_file = "my_study_KEY.txt")
+  reidentify("my_study_masked_2026-10-23_14-53.csv",
+             key_file = "my_study_KEY_2026-10-23_14-53.txt")
   ```
 - **Same codes across studies**: reuse the key with
-  `key_file = "my_study_KEY.txt"`. The same participant then gets the same
+  `key_file = "my_study_KEY_2026-10-23_14-53.txt"`. The same participant then gets the same
   code in every file masked with that key.
 - **Spotting repeat participants**: the same platform ID code
   (`workerId`, `PROLIFIC_PID`, `participantId`) means the same person. Equal

@@ -38,14 +38,16 @@ for the columns found by \code{\link[=suggest_id_columns]{suggest_id_columns()}}
 
 \item{key_file}{Path to an existing key file. Reusing a key gives the same
 codes for the same participants across studies. If \code{NULL}, a new key is
-created and saved as \verb{<name>_KEY.txt} next to the original file.}
+created and saved as \verb{<name>_KEY_<date>_<time>.txt} next to the original
+file.}
 
 \item{scan_text}{Look for identifiers typed into the other columns.}
 
 \item{mask_text}{Also replace identifiers found in other columns with
 their codes.}
 
-\item{output}{Path of the masked file. Defaults to \verb{<name>_masked.<ext>}.}
+\item{output}{Path of the masked file. Defaults to
+\verb{<name>_masked_<date>_<time>.<ext>}.}
 
 \item{overwrite}{Replace existing output files.}
 
@@ -72,13 +74,15 @@ command that repeats the same masking is printed.
 
 The original file is never changed. Files written:
 \itemize{
-\item \verb{<name>_masked.<ext>}: the data to share;
-\item \verb{<name>_masked_report.txt}: what was masked, when, and a SHA-256 checksum
-of the masked file;
-\item \verb{<name>_KEY.txt}, next to the original file (only when no \code{key_file} is
-given): the private key. Keep it with the original data and never share
-it.
+\item \verb{<name>_masked_<date>_<time>.<ext>}: the data to share;
+\item \verb{<name>_masked_<date>_<time>_report.txt}: what was masked, when, and a
+SHA-256 checksum of the masked file;
+\item \verb{<name>_KEY_<date>_<time>.txt}, next to the original file (only when no
+\code{key_file} is given): the private key. Keep it with the original data and
+never share it.
 }
+
+\verb{<date>_<time>} is when the run started, e.g. \verb{2026-10-23_14-53}.
 }
 \examples{
 \dontrun{

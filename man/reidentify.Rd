@@ -15,10 +15,11 @@ reidentify(
 \arguments{
 \item{file}{Path to a masked file (.csv, .sav or .xlsx).}
 
-\item{key_file}{Path to the key file used to mask it (\verb{<name>_KEY.txt}).}
+\item{key_file}{Path to the key file used to mask it
+(\verb{<name>_KEY_<date>_<time>.txt}).}
 
 \item{output}{Path of the re-identified file. Defaults to
-\verb{<name>_reidentified.<ext>}.}
+\verb{<name>_reidentified_<date>_<time>.<ext>}.}
 
 \item{overwrite}{Replace an existing output file.}
 
@@ -34,10 +35,11 @@ Reads a file masked by \code{\link[=mask_qualtrics]{mask_qualtrics()}} and, usin
 replaces every \code{MSK} code (also inside free text) with the original value.
 \code{MSKblank} becomes an empty cell again. Codes made with a different key are
 left as they are. The masked file is not changed; the result is written to
-\verb{<name>_reidentified.<ext>}.
+\verb{<name>_reidentified_<date>_<time>.<ext>}.
 }
 \examples{
 \dontrun{
-reidentify("my_study_masked.csv", key_file = "my_study_KEY.txt")
+reidentify("my_study_masked_2026-10-23_14-53.csv",
+           key_file = "my_study_KEY_2026-10-23_14-53.txt")
 }
 }

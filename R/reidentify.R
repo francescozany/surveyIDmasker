@@ -4,12 +4,13 @@
 #' replaces every `MSK` code (also inside free text) with the original value.
 #' `MSKblank` becomes an empty cell again. Codes made with a different key are
 #' left as they are. The masked file is not changed; the result is written to
-#' `<name>_reidentified.<ext>`.
+#' `<name>_reidentified_<date>_<time>.<ext>`.
 #'
 #' @param file Path to a masked file (.csv, .sav or .xlsx).
-#' @param key_file Path to the key file used to mask it (`<name>_KEY.txt`).
+#' @param key_file Path to the key file used to mask it
+#'   (`<name>_KEY_<date>_<time>.txt`).
 #' @param output Path of the re-identified file. Defaults to
-#'   `<name>_reidentified.<ext>`.
+#'   `<name>_reidentified_<date>_<time>.<ext>`.
 #' @param overwrite Replace an existing output file.
 #' @param header_rows Number of header rows in CSV/Excel files (detected
 #'   automatically).
@@ -17,7 +18,8 @@
 #'   path.
 #' @examples
 #' \dontrun{
-#' reidentify("my_study_masked.csv", key_file = "my_study_KEY.txt")
+#' reidentify("my_study_masked_2026-10-23_14-53.csv",
+#'            key_file = "my_study_KEY_2026-10-23_14-53.txt")
 #' }
 #' @export
 reidentify <- function(file, key_file, output = NULL, overwrite = FALSE,
@@ -26,11 +28,9 @@ reidentify <- function(file, key_file, output = NULL, overwrite = FALSE,
   x <- read_qualtrics(file, header_rows)
   data <- x$data
 
-  out_path <- output %||% if (grepl("_masked\\.[^.]+$", file)) {
-    sub("_masked(\\.[^.]+)$", "_reidentified\\1", file)
-  } else {
-    sub("(\\.[^.]+)$", "_reidentified\\1", file)
-  }
+  # "study_masked_2026-10-23_14-53.csv" -> "study_reidentified_<now>.csv"
+  base <- sub("_masked(_\\d{4}-\\d{2}-\\d{2}_\\d{2}-\\d{2})?(\\.[^.]+)$", "\\2", file)
+  out_path <- output %||% sub("(\\.[^.]+)$", paste0("_reidentified_", time_stamp(), "\\1"), base)
   if (!overwrite && file.exists(out_path)) {
     stop("Output already exists: ", out_path, "\nUse overwrite = TRUE to replace it.")
   }

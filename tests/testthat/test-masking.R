@@ -33,6 +33,7 @@ test_that("the same key gives the same codes; another key does not", {
 })
 
 test_that("CSV export keeps header rows and masks consistently across columns", {
+  local_mocked_bindings(time_stamp = function() "2026-01-01_10-00")
   dir <- withr_tempdir()
   path <- fake_export(dir)
   res <- mask_qualtrics(path, columns = c("IPAddress", "LocationLatitude", "LocationLongitude",
@@ -149,18 +150,22 @@ test_that("ip/latlon are checked, and ignored when there is nothing to apply the
 })
 
 test_that("reidentify restores every original value with the key", {
+  local_mocked_bindings(time_stamp = function() "2026-01-01_10-00")
   dir <- withr_tempdir()
   path <- fake_export(dir)
   res <- mask_qualtrics(path, columns = c("IPAddress", "LocationLatitude", "LocationLongitude",
                                           "PROLIFIC_PID", "participantId"),
                         ip = "full", latlon = "country_state", mask_text = TRUE)
-  expect_true(file.exists(file.path(dir, "study_KEY.txt")))
+  expect_match(res$output, "study_masked_2026-01-01_10-00[.]csv$")
+  expect_match(res$report, "study_masked_2026-01-01_10-00_report[.]txt$")
+  expect_true(file.exists(file.path(dir, "study_KEY_2026-01-01_10-00.txt")))
   back <- reidentify(res$output, key_file = res$key_file)
   expect_equal(readLines(back$output), readLines(path))
-  expect_match(back$output, "study_reidentified[.]csv$")
+  expect_match(back$output, "study_reidentified_2026-01-01_10-00[.]csv$")
 })
 
 test_that("an existing key is never overwritten, and can be reused", {
+  local_mocked_bindings(time_stamp = function() "2026-01-01_10-00")
   dir <- withr_tempdir()
   path <- fake_export(dir)
   res1 <- mask_qualtrics(path, columns = "PROLIFIC_PID", scan_text = FALSE)
@@ -179,4 +184,16 @@ test_that("a wrong key cannot reidentify", {
   other <- new_key_file(file.path(dir, "other_KEY.txt"))
   expect_error(reidentify(res$output, key_file = other), "None of the codes match")
   expect_error(reidentify(res$output, key_file = path), "does not look like")
+})
+
+test_that("each run's files get the time it ran", {
+  dir <- withr_tempdir()
+  path <- fake_export(dir)
+  local_mocked_bindings(time_stamp = function() "2026-01-01_10-00")
+  r1 <- mask_qualtrics(path, columns = "PROLIFIC_PID", scan_text = FALSE)
+  local_mocked_bindings(time_stamp = function() "2026-01-01_10-05")
+  r2 <- mask_qualtrics(path, columns = "PROLIFIC_PID", scan_text = FALSE)
+  expect_true(all(file.exists(c(r1$output, r1$report, r1$key_file, r2$output, r2$report, r2$key_file))))
+  expect_match(r2$key_file, "study_KEY_2026-01-01_10-05[.]txt$")
+  expect_false(identical(r1$data$PROLIFIC_PID, r2$data$PROLIFIC_PID))
 })

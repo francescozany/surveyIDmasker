@@ -13,12 +13,14 @@
 #' command that repeats the same masking is printed.
 #'
 #' The original file is never changed. Files written:
-#' * `<name>_masked.<ext>`: the data to share;
-#' * `<name>_masked_report.txt`: what was masked, when, and a SHA-256 checksum
-#'   of the masked file;
-#' * `<name>_KEY.txt`, next to the original file (only when no `key_file` is
-#'   given): the private key. Keep it with the original data and never share
-#'   it.
+#' * `<name>_masked_<date>_<time>.<ext>`: the data to share;
+#' * `<name>_masked_<date>_<time>_report.txt`: what was masked, when, and a
+#'   SHA-256 checksum of the masked file;
+#' * `<name>_KEY_<date>_<time>.txt`, next to the original file (only when no
+#'   `key_file` is given): the private key. Keep it with the original data and
+#'   never share it.
+#'
+#' `<date>_<time>` is when the run started, e.g. `2026-10-23_14-53`.
 #'
 #' @param file Path to a Qualtrics export (.csv, .sav or .xlsx). If `NULL`, a
 #'   file chooser opens.
@@ -34,11 +36,13 @@
 #'   (<https://db-ip.com/db/lite.php>), needed for `ip = "country_state"`.
 #' @param key_file Path to an existing key file. Reusing a key gives the same
 #'   codes for the same participants across studies. If `NULL`, a new key is
-#'   created and saved as `<name>_KEY.txt` next to the original file.
+#'   created and saved as `<name>_KEY_<date>_<time>.txt` next to the original
+#'   file.
 #' @param scan_text Look for identifiers typed into the other columns.
 #' @param mask_text Also replace identifiers found in other columns with
 #'   their codes.
-#' @param output Path of the masked file. Defaults to `<name>_masked.<ext>`.
+#' @param output Path of the masked file. Defaults to
+#'   `<name>_masked_<date>_<time>.<ext>`.
 #' @param overwrite Replace existing output files.
 #' @param header_rows Number of header rows in CSV/Excel files (detected
 #'   automatically).
@@ -98,7 +102,8 @@ mask_qualtrics <- function(file = NULL, columns = NULL, ip = NULL, latlon = NULL
   }
   if (!is.null(ip_db) && !file.exists(ip_db)) stop("IP database not found: ", ip_db)
 
-  out_path <- output %||% sub("(\\.[^.]+)$", "_masked\\1", file)
+  stamp <- time_stamp()
+  out_path <- output %||% sub("(\\.[^.]+)$", paste0("_masked_", stamp, "\\1"), file)
   report_path <- sub("\\.[^.]+$", "_report.txt", out_path)
   if (!overwrite && any(file.exists(c(out_path, report_path)))) {
     stop("Output already exists: ", out_path, "\nUse overwrite = TRUE to replace it.")
@@ -110,7 +115,7 @@ mask_qualtrics <- function(file = NULL, columns = NULL, ip = NULL, latlon = NULL
   # impossible to re-identify.
   new_key <- is.null(key_file)
   if (new_key) {
-    key_file <- sub("\\.[^.]+$", "_KEY.txt", file)
+    key_file <- sub("\\.[^.]+$", paste0("_KEY_", stamp, ".txt"), file)
     if (file.exists(key_file)) {
       stop("A key file already exists: ", key_file,
            "\nReuse it with key_file = \"", key_file, "\", or move it elsewhere first.", call. = FALSE)
@@ -207,6 +212,9 @@ mask_qualtrics <- function(file = NULL, columns = NULL, ip = NULL, latlon = NULL
 }
 
 `%||%` <- function(a, b) if (is.null(a)) b else a
+
+# Date and time added to the names of the files a run writes.
+time_stamp <- function() format(Sys.time(), "%Y-%m-%d_%H-%M")
 
 # Latitude and longitude codes encrypt the whole (lat, lon) pair, tagged so
 # the two columns get different codes and reidentify() knows which half to
