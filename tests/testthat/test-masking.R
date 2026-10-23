@@ -14,18 +14,22 @@ fake_export <- function(dir) {
 
 test_that("codes have the right form and repeat for equal values", {
   m <- mask_values(c("A1B2C3", "", NA, "A1B2C3", " A1B2C3 ", "XYZ"))
-  expect_match(m[c(1, 4, 6)], "^MSK[A-Za-z0-9]{10}$")
+  expect_match(m[c(1, 4, 6)], "^MSK[A-Za-z0-9]{12,}$")
   expect_equal(m[2:3], c("MSKblank", "MSKblank"))
   expect_equal(m[1], m[4])
   expect_equal(m[1], m[5])
   expect_false(m[1] == m[6])
 })
 
-test_that("a seed makes codes reproducible; no seed does not", {
-  seed <- "a long private phrase for testing"
-  expect_equal(mask_values(c("x1", "y2"), seed = seed), mask_values(c("x1", "y2"), seed = seed))
-  expect_false(identical(mask_values("x1", seed = seed), mask_values("x1", seed = "another long phrase")))
-  expect_false(identical(mask_values(rep("x1", 1)), mask_values(rep("x1", 1))))
+test_that("the same key gives the same codes; another key does not", {
+  dir <- withr_tempdir()
+  k1 <- new_key_file(file.path(dir, "k1.txt"))
+  k2 <- new_key_file(file.path(dir, "k2.txt"))
+  expect_equal(mask_values(c("x1", "y2"), key_file = k1), mask_values(c("x1", "y2"), key_file = k1))
+  expect_false(identical(mask_values("x1", key_file = k1), mask_values("x1", key_file = k2)))
+  expect_false(identical(mask_values("x1"), mask_values("x1")))
+  expect_error(new_key_file(k1), "already exists")
+  expect_false(any(grepl("x1", readLines(k1))))
 })
 
 test_that("CSV export keeps header rows and masks consistently across columns", {
@@ -60,7 +64,7 @@ test_that("country_state keeps country and US state", {
   res <- mask_qualtrics(path, columns = c("LocationLatitude", "LocationLongitude"),
                         latlon = "country_state", scan_text = FALSE)
   d <- read_qualtrics(res$output)$data
-  expect_match(d$LocationLatitude, "^MSK(USCT|IT)[A-Za-z0-9]{10}$")
+  expect_match(d$LocationLatitude, "^MSK(USCT|IT)[A-Za-z0-9]{12,}$")
   expect_match(d$LocationLatitude[2], "^MSKIT")
 })
 
@@ -113,7 +117,7 @@ test_that("columns can be given by number or as \"suggested\"", {
   expect_equal(d$LocationLatitude[1], "41.3083")
   expect_error(mask_qualtrics(path, columns = 99, overwrite = TRUE), "out of range")
   res <- mask_qualtrics(path, columns = "suggested", ip = "full", latlon = "full",
-                        scan_text = FALSE, overwrite = TRUE)
+                        scan_text = FALSE, overwrite = TRUE, key_file = res$key_file)
   expect_match(read_qualtrics(res$output)$data$participantId[1], "^MSK")
 })
 
@@ -127,7 +131,7 @@ test_that("country of IP addresses comes from a DB-IP file", {
   res <- mask_qualtrics(path, columns = "IPAddress", ip = "country_state",
                         ip_db = db, scan_text = FALSE)
   d <- read_qualtrics(res$output)$data
-  expect_match(d$IPAddress, "^MSK(USCT|IT)[A-Za-z0-9]{10}$")
+  expect_match(d$IPAddress, "^MSK(USCT|IT)[A-Za-z0-9]{12,}$")
   expect_match(d$IPAddress[2], "^MSKIT")
   expect_error(mask_qualtrics(path, columns = "IPAddress", ip = "country_state",
                               overwrite = TRUE), "DB-IP")
@@ -142,4 +146,37 @@ test_that("ip/latlon are checked, and ignored when there is nothing to apply the
   res <- mask_qualtrics(path, columns = "PROLIFIC_PID", ip = "country_state",
                         latlon = "country_state", scan_text = FALSE)
   expect_match(read_qualtrics(res$output)$data$PROLIFIC_PID, "^MSK")
+})
+
+test_that("reidentify restores every original value with the key", {
+  dir <- withr_tempdir()
+  path <- fake_export(dir)
+  res <- mask_qualtrics(path, columns = c("IPAddress", "LocationLatitude", "LocationLongitude",
+                                          "PROLIFIC_PID", "participantId"),
+                        ip = "full", latlon = "country_state", mask_text = TRUE)
+  expect_true(file.exists(file.path(dir, "study_KEY.txt")))
+  back <- reidentify(res$output, key_file = res$key_file)
+  expect_equal(readLines(back$output), readLines(path))
+  expect_match(back$output, "study_reidentified[.]csv$")
+})
+
+test_that("an existing key is never overwritten, and can be reused", {
+  dir <- withr_tempdir()
+  path <- fake_export(dir)
+  res1 <- mask_qualtrics(path, columns = "PROLIFIC_PID", scan_text = FALSE)
+  key_before <- readLines(res1$key_file)
+  expect_error(mask_qualtrics(path, columns = "PROLIFIC_PID", overwrite = TRUE), "key file already exists")
+  res2 <- mask_qualtrics(path, columns = "PROLIFIC_PID", overwrite = TRUE,
+                         key_file = res1$key_file, scan_text = FALSE)
+  expect_equal(readLines(res1$key_file), key_before)
+  expect_equal(res1$data$PROLIFIC_PID, res2$data$PROLIFIC_PID)
+})
+
+test_that("a wrong key cannot reidentify", {
+  dir <- withr_tempdir()
+  path <- fake_export(dir)
+  res <- mask_qualtrics(path, columns = "PROLIFIC_PID", scan_text = FALSE)
+  other <- new_key_file(file.path(dir, "other_KEY.txt"))
+  expect_error(reidentify(res$output, key_file = other), "None of the codes match")
+  expect_error(reidentify(res$output, key_file = path), "does not look like")
 })

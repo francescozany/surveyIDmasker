@@ -1,14 +1,16 @@
-Package: qualtricsmasker
-Title: Mask Participant Identifiers in Qualtrics Exports
+Package: surveyIDmasker
+Title: Mask Participant Identifiers in Survey Exports
 Version: 0.1.0
 Authors@R:
     person("Francesco", "Zanibellato", email = "fz150@georgetown.edu",
            role = c("aut", "cre"))
-Description: Replaces participant identifiers in Qualtrics survey exports
-    (Prolific, CloudResearch Connect and MTurk IDs, IP addresses, locations,
-    emails) with random codes prefixed by "MSK", so that data can be shared
-    without disclosing identities while repeated participants remain
-    recognizable. Reads and writes CSV, SPSS (.sav) and Excel (.xlsx) exports.
+Description: Replaces participant identifiers in survey exports (Prolific,
+    CloudResearch Connect and MTurk IDs, IP addresses, locations, emails)
+    with codes prefixed by "MSK", made by encrypting each value with a private
+    key. Data can be shared without disclosing identities while repeated
+    participants remain recognizable, and the authors, who keep the key, can
+    turn the codes back into the original identifiers. Reads and writes the
+    CSV, SPSS (.sav) and Excel (.xlsx) files exported by Qualtrics.
 License: MIT + file LICENSE
 Encoding: UTF-8
 Roxygen: list(markdown = TRUE)

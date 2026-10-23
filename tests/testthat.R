@@ -1,4 +1,4 @@
 library(testthat)
-library(qualtricsmasker)
+library(surveyIDmasker)
 
-test_check("qualtricsmasker")
+test_check("surveyIDmasker")

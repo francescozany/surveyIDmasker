@@ -3,6 +3,8 @@
 export(list_columns)
 export(mask_qualtrics)
 export(mask_values)
+export(new_key_file)
 export(read_qualtrics)
+export(reidentify)
 export(scan_text)
 export(suggest_id_columns)

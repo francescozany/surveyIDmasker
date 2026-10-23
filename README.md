@@ -1,17 +1,17 @@
-# qualtricsmasker
+# surveyIDmasker
 
-Mask participant identifiers in Qualtrics exports before sharing them.
+Mask participant identifiers in survey exports (e.g. Qualtrics) before sharing them.
 
 Prolific, CloudResearch Connect and MTurk IDs, IP addresses, locations and
-emails are replaced with `MSK` plus a random 10-character code, for example
-`MSK4fQz81LbXa`. The same value always gets the same code within the file,
+emails are replaced with `MSK` plus an encrypted code, for example
+`MSKJQ04U6NUB6dJBSwJy9AaqBx07y`. The same value always gets the same code within the file,
 so repeat participants can still be spotted. Blank cells become `MSKblank`.
 
 ## Install
 
 ```r
 install.packages("remotes")
-remotes::install_github("francescozany/qualtricsmasker")
+remotes::install_github("francescozany/surveyIDmasker")
 
 # Only needed to keep country/state in masked locations:
 install.packages(c("maps", "countrycode"))
@@ -20,7 +20,7 @@ install.packages(c("maps", "countrycode"))
 ## Use
 
 ```r
-library(qualtricsmasker)
+library(surveyIDmasker)
 mask_qualtrics()
 ```
 
@@ -35,10 +35,11 @@ That's it. You will be asked to:
 Changed your mind? Type `q` at any question (or press Esc) to exit.
 Nothing is saved until the end.
 
-Two files are written next to the original, which is never changed:
+Files written (the original is never changed):
 
 - `<name>_masked.<ext>`: the file to share;
-- `<name>_masked_report.txt`: what was masked and when.
+- `<name>_masked_report.txt`: what was masked and when;
+- `<name>_KEY.txt`: the private key. **Keep it, never share it.**
 
 ### In one line (scripts, AI agents)
 
@@ -57,10 +58,21 @@ After every run, the console prints the one-line command that repeats it.
 
 ## Good to know
 
-- **Codes are random and cannot be reversed.** No key or lookup table is saved.
-- **Same codes across studies**: use `seed = "a long private phrase"`. The
-  same ID then gets the same code in every file you mask with that seed.
-  Keep the seed private, and don't use short seeds like `123`: they can be guessed.
+- **The key file.** Codes are the identifiers encrypted with a private key,
+  saved as `<name>_KEY.txt` next to your original file. Keep it with the
+  original data and **never share it**. Without it, nobody can turn the
+  codes back into identifiers. With it, you can:
+  ```r
+  reidentify("my_study_masked.csv", key_file = "my_study_KEY.txt")
+  ```
+- **Same codes across studies**: reuse the key with
+  `key_file = "my_study_KEY.txt"`. The same participant then gets the same
+  code in every file masked with that key.
+- **Spotting repeat participants**: the same platform ID code
+  (`workerId`, `PROLIFIC_PID`, `participantId`) means the same person. Equal
+  IP or location codes only mean the same network or the same estimated
+  place (Qualtrics locations are approximate), so treat them as supporting
+  evidence, not proof.
 - **Unknown places**: a location that can't be matched to a country gets a
   plain `MSK...` code.
 - **IP addresses with country/state** need the free DB-IP "IP to City Lite"

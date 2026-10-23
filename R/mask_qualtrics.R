@@ -1,18 +1,24 @@
 #' Mask participant identifiers in a Qualtrics export
 #'
 #' Replaces identifiers (Prolific/Connect/MTurk IDs, IP addresses, locations,
-#' emails, ...) with `"MSK"` plus a random 10-character code. The same value
-#' gets the same code everywhere in the file, so repeat participants can still
-#' be spotted. Blank cells become `"MSKblank"`.
+#' emails, ...) with `"MSK"` plus a code made by encrypting the value with a
+#' private key. The same value gets the same code everywhere in the file, so
+#' repeat participants can still be spotted. Blank cells become `"MSKblank"`.
+#' Without the key the codes cannot be turned back; with it, [reidentify()]
+#' restores the original identifiers.
 #'
 #' Run it with no arguments to be guided step by step. Anything you give as an
 #' argument is not asked, so a call with `file`, `columns`, `ip` and `latlon`
 #' runs without any questions (handy for scripts). At the end, the one-line
 #' command that repeats the same masking is printed.
 #'
-#' The original file is never changed. Two files are written next to it:
-#' `<name>_masked.<ext>` (the data to share) and `<name>_masked_report.txt`
-#' (what was masked, when, and a SHA-256 checksum of the masked file).
+#' The original file is never changed. Files written:
+#' * `<name>_masked.<ext>`: the data to share;
+#' * `<name>_masked_report.txt`: what was masked, when, and a SHA-256 checksum
+#'   of the masked file;
+#' * `<name>_KEY.txt`, next to the original file (only when no `key_file` is
+#'   given): the private key. Keep it with the original data and never share
+#'   it.
 #'
 #' @param file Path to a Qualtrics export (.csv, .sav or .xlsx). If `NULL`, a
 #'   file chooser opens.
@@ -26,10 +32,9 @@
 #'   `"country_state"`.
 #' @param ip_db Path to the free DB-IP "IP to City Lite" CSV file
 #'   (<https://db-ip.com/db/lite.php>), needed for `ip = "country_state"`.
-#' @param seed Optional seed (a long phrase) to make the codes reproducible:
-#'   with the same seed the same value always gets the same code, across runs
-#'   and studies. Without a seed the codes are random and cannot be reproduced
-#'   by anyone. Keep the seed private; short seeds such as `123` can be guessed.
+#' @param key_file Path to an existing key file. Reusing a key gives the same
+#'   codes for the same participants across studies. If `NULL`, a new key is
+#'   created and saved as `<name>_KEY.txt` next to the original file.
 #' @param scan_text Look for identifiers typed into the other columns.
 #' @param mask_text Also replace identifiers found in other columns with
 #'   their codes.
@@ -37,8 +42,8 @@
 #' @param overwrite Replace existing output files.
 #' @param header_rows Number of header rows in CSV/Excel files (detected
 #'   automatically).
-#' @return Invisibly, a list with the masked `data`, the `output` path and the
-#'   `report` path.
+#' @return Invisibly, a list with the masked `data` and the paths of the
+#'   `output`, the `report` and the `key_file`.
 #' @examples
 #' \dontrun{
 #' mask_qualtrics()   # guided
@@ -49,7 +54,7 @@
 #' }
 #' @export
 mask_qualtrics <- function(file = NULL, columns = NULL, ip = NULL, latlon = NULL,
-                           ip_db = NULL, seed = NULL,
+                           ip_db = NULL, key_file = NULL,
                            scan_text = TRUE, mask_text = FALSE,
                            output = NULL, overwrite = FALSE,
                            header_rows = NULL) {
@@ -93,11 +98,6 @@ mask_qualtrics <- function(file = NULL, columns = NULL, ip = NULL, latlon = NULL
   }
   if (!is.null(ip_db) && !file.exists(ip_db)) stop("IP database not found: ", ip_db)
 
-  if (!is.null(seed)) {
-    seed <- as.character(seed)
-    if (nchar(seed) < 12) warning("Short seeds can be guessed. Use a long phrase to keep the codes safe.", call. = FALSE)
-  }
-
   out_path <- output %||% sub("(\\.[^.]+)$", "_masked\\1", file)
   report_path <- sub("\\.[^.]+$", "_report.txt", out_path)
   if (!overwrite && any(file.exists(c(out_path, report_path)))) {
@@ -106,8 +106,21 @@ mask_qualtrics <- function(file = NULL, columns = NULL, ip = NULL, latlon = NULL
   if (normalizePath(out_path, mustWork = FALSE) == normalizePath(file)) {
     stop("The output must be a different file from the original.")
   }
+  # A key is never overwritten: that would make earlier masked files
+  # impossible to re-identify.
+  new_key <- is.null(key_file)
+  if (new_key) {
+    key_file <- sub("\\.[^.]+$", "_KEY.txt", file)
+    if (file.exists(key_file)) {
+      stop("A key file already exists: ", key_file,
+           "\nReuse it with key_file = \"", key_file, "\", or move it elsewhere first.", call. = FALSE)
+    }
+    key <- derive_key(openssl::rand_bytes(32))
+  } else {
+    key <- read_key_file(key_file)
+  }
 
-  cb <- new_codebook(seed)
+  cb <- new_codebook(key)
   notes <- character()
   originals <- unlist(lapply(columns, function(col) as.character(data[[col]])))
   done <- character()
@@ -125,9 +138,9 @@ mask_qualtrics <- function(file = NULL, columns = NULL, ip = NULL, latlon = NULL
       notes <- c(notes, unknown_note(region, lat, "latitude/longitude"))
     }
     data[[lat_col]] <- replace_column(data[[lat_col]],
-      mask_with(cb, lat, keys = paste0("latitude@", pair), prefix = prefix))
+      mask_with(cb, lat, keys = paste0(lat_tag, pair), prefix = prefix))
     data[[lon_col]] <- replace_column(data[[lon_col]],
-      mask_with(cb, lon, keys = paste0("longitude@", pair), prefix = prefix))
+      mask_with(cb, lon, keys = paste0(lon_tag, pair), prefix = prefix))
     done <- c(lat_col, lon_col)
   }
 
@@ -173,21 +186,33 @@ mask_qualtrics <- function(file = NULL, columns = NULL, ip = NULL, latlon = NULL
 
   x$data <- data
   write_qualtrics(x, out_path)
+  if (new_key) write_key_file(key$secret, key_file, used_for = basename(file))
   write_report(report_path, file, out_path, nrow(data), columns,
                if (length(ip_cols)) ip, if (has_pair) latlon,
-               seed, notes, text_found, mask_text)
+               notes, text_found, mask_text)
 
   cat("\nMasked", length(columns), "column(s):", paste(columns, collapse = ", "), "\n")
   for (n in notes) message("Note: ", n)
   if (!is.null(text_found) && nrow(text_found)) print(text_found, row.names = FALSE)
   cat("Masked file: ", out_path, "\nReport:      ", report_path, "\n", sep = "")
+  cat("Key:         ", key_file, if (new_key) " (new)" else " (reused)", "\n", sep = "")
+  if (new_key) {
+    message("\nKEEP THE KEY FILE PRIVATE. Store it with the original data and never share it.\n",
+            "It is the only way to turn the codes back into the original identifiers.")
+  }
   cat("\nTo repeat this masking in one line:\n",
       repeat_command(file, columns, if (length(ip_cols)) ip, if (has_pair) latlon,
-                     ip_db, seed, mask_text), "\n", sep = "")
-  invisible(list(data = data, output = out_path, report = report_path))
+                     ip_db, key_file, mask_text), "\n", sep = "")
+  invisible(list(data = data, output = out_path, report = report_path, key_file = key_file))
 }
 
 `%||%` <- function(a, b) if (is.null(a)) b else a
+
+# Latitude and longitude codes encrypt the whole (lat, lon) pair, tagged so
+# the two columns get different codes and reidentify() knows which half to
+# return.
+lat_tag <- "\037a"
+lon_tag <- "\037o"
 
 choose_columns <- function(data, ask) {
   found <- suggest_id_columns(data, include_empty = TRUE)
@@ -251,13 +276,13 @@ format_columns <- function(labels) {
 }
 
 write_report <- function(path, input, output, n_rows, columns, ip, latlon,
-                         seed, notes, text_found, mask_text) {
+                         notes, text_found, mask_text) {
   mode_label <- function(m) if (identical(m, "country_state")) "country/US state kept" else "full"
   lines <- c(
-    "qualtricsmasker report",
+    "surveyIDmasker report",
     "======================",
     paste("Created:        ", format(Sys.time(), "%Y-%m-%d %H:%M:%S %Z")),
-    paste("Package version:", as.character(utils::packageVersion("qualtricsmasker"))),
+    paste("Package version:", as.character(utils::packageVersion("surveyIDmasker"))),
     paste("Original file:  ", basename(input)),
     paste("Masked file:    ", basename(output)),
     paste("Rows:           ", n_rows),
@@ -267,8 +292,8 @@ write_report <- function(path, input, output, n_rows, columns, ip, latlon,
     "",
     if (!is.null(ip)) paste("IP addresses:    ", mode_label(ip)),
     if (!is.null(latlon)) paste("Latitude/longitude:", mode_label(latlon)),
-    paste("Codes:          ", if (is.null(seed)) "random (cannot be reproduced)" else
-      "derived from a private seed (reproducible only with the same seed)"),
+    "Codes:           encrypted with a private key kept by the authors; without",
+    "                 the key they cannot be turned back into identifiers",
     "Blank values:    MSKblank"
   )
   if (length(notes)) lines <- c(lines, "", "Notes:", paste0("  - ", notes))
@@ -326,7 +351,7 @@ choose_mode <- function(mode, what, ask) {
     return("full")
   }
   choice <- ask_choice(paste0("How should ", what, " be masked?"),
-                       c("Fully masked, like the other identifiers (MSK + 10 characters)",
+                       c("Fully masked, like the other identifiers (MSK + code)",
                          "Keep country, and state for the US (e.g. MSKUSCT..., MSKIT...)"))
   if (choice == 2) "country_state" else "full"
 }
@@ -371,14 +396,14 @@ unknown_note <- function(region, values, what) {
   sprintf("%s: %d value(s) could not be matched to a country and got a plain MSK code.", what, n)
 }
 
-repeat_command <- function(file, columns, ip, latlon, ip_db, seed, mask_text) {
+repeat_command <- function(file, columns, ip, latlon, ip_db, key_file, mask_text) {
   q <- function(x) paste0('"', gsub('"', '\\\\"', x), '"')
   args <- c(q(file),
             paste0("columns = c(", paste(q(columns), collapse = ", "), ")"),
             if (!is.null(ip)) paste0("ip = ", q(ip)),
             if (!is.null(latlon)) paste0("latlon = ", q(latlon)),
             if (!is.null(ip_db)) paste0("ip_db = ", q(ip_db)),
-            if (!is.null(seed)) "seed = \"<your seed>\"",
+            paste0("key_file = ", q(key_file)),
             if (mask_text) "mask_text = TRUE")
   paste0("mask_qualtrics(", paste(args, collapse = ", "), ")")
 }

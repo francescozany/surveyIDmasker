@@ -10,7 +10,7 @@ mask_qualtrics(
   ip = NULL,
   latlon = NULL,
   ip_db = NULL,
-  seed = NULL,
+  key_file = NULL,
   scan_text = TRUE,
   mask_text = FALSE,
   output = NULL,
@@ -36,10 +36,9 @@ for the columns found by \code{\link[=suggest_id_columns]{suggest_id_columns()}}
 \item{ip_db}{Path to the free DB-IP "IP to City Lite" CSV file
 (\url{https://db-ip.com/db/lite.php}), needed for \code{ip = "country_state"}.}
 
-\item{seed}{Optional seed (a long phrase) to make the codes reproducible:
-with the same seed the same value always gets the same code, across runs
-and studies. Without a seed the codes are random and cannot be reproduced
-by anyone. Keep the seed private; short seeds such as \code{123} can be guessed.}
+\item{key_file}{Path to an existing key file. Reusing a key gives the same
+codes for the same participants across studies. If \code{NULL}, a new key is
+created and saved as \verb{<name>_KEY.txt} next to the original file.}
 
 \item{scan_text}{Look for identifiers typed into the other columns.}
 
@@ -54,14 +53,16 @@ their codes.}
 automatically).}
 }
 \value{
-Invisibly, a list with the masked \code{data}, the \code{output} path and the
-\code{report} path.
+Invisibly, a list with the masked \code{data} and the paths of the
+\code{output}, the \code{report} and the \code{key_file}.
 }
 \description{
 Replaces identifiers (Prolific/Connect/MTurk IDs, IP addresses, locations,
-emails, ...) with \code{"MSK"} plus a random 10-character code. The same value
-gets the same code everywhere in the file, so repeat participants can still
-be spotted. Blank cells become \code{"MSKblank"}.
+emails, ...) with \code{"MSK"} plus a code made by encrypting the value with a
+private key. The same value gets the same code everywhere in the file, so
+repeat participants can still be spotted. Blank cells become \code{"MSKblank"}.
+Without the key the codes cannot be turned back; with it, \code{\link[=reidentify]{reidentify()}}
+restores the original identifiers.
 }
 \details{
 Run it with no arguments to be guided step by step. Anything you give as an
@@ -69,9 +70,15 @@ argument is not asked, so a call with \code{file}, \code{columns}, \code{ip} and
 runs without any questions (handy for scripts). At the end, the one-line
 command that repeats the same masking is printed.
 
-The original file is never changed. Two files are written next to it:
-\verb{<name>_masked.<ext>} (the data to share) and \verb{<name>_masked_report.txt}
-(what was masked, when, and a SHA-256 checksum of the masked file).
+The original file is never changed. Files written:
+\itemize{
+\item \verb{<name>_masked.<ext>}: the data to share;
+\item \verb{<name>_masked_report.txt}: what was masked, when, and a SHA-256 checksum
+of the masked file;
+\item \verb{<name>_KEY.txt}, next to the original file (only when no \code{key_file} is
+given): the private key. Keep it with the original data and never share
+it.
+}
 }
 \examples{
 \dontrun{

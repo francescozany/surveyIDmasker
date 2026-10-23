@@ -4,14 +4,14 @@
 \alias{mask_values}
 \title{Mask a vector of identifiers}
 \usage{
-mask_values(x, seed = NULL, prefix = "MSK")
+mask_values(x, key_file = NULL, prefix = "MSK")
 }
 \arguments{
 \item{x}{A vector of identifiers.}
 
-\item{seed}{Optional seed (a long phrase is best). With the same seed, the
-same value always gets the same code, across runs and files. Without it,
-codes are random and cannot be reproduced.}
+\item{key_file}{Path to a key file made by \code{\link[=mask_qualtrics]{mask_qualtrics()}} or
+\code{\link[=new_key_file]{new_key_file()}}. If \code{NULL}, a temporary key is used and the codes cannot
+be turned back.}
 
 \item{prefix}{Prefix(es) placed before the code, recycled along \code{x}.}
 }
@@ -19,9 +19,10 @@ codes are random and cannot be reproduced.}
 A character vector of masked values.
 }
 \description{
-Replaces every non-blank value with \code{"MSK"} plus a 10-character
-alphanumeric code. Equal values get equal codes; blank or missing values
-become \code{"MSKblank"}.
+Replaces every non-blank value with \code{"MSK"} plus a code made by encrypting
+the value with a key. Equal values get equal codes; blank or missing values
+become \code{"MSKblank"}. With the same key, \code{\link[=reidentify]{reidentify()}} turns the codes back
+into the original values.
 }
 \examples{
 mask_values(c("A1B2C3", "", "A1B2C3", "XYZ"))
