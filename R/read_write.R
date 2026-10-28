@@ -80,7 +80,7 @@ write_qualtrics <- function(x, path) {
         readr::write_csv(out, path, col_names = FALSE, na = "")
       }
     },
-    sav = haven::write_sav(x$data, path),
+    sav = write_sav_any(x$data, path),
     xlsx = {
       wb <- openxlsx::createWorkbook()
       openxlsx::addWorksheet(wb, x$sheet)
@@ -90,6 +90,20 @@ write_qualtrics <- function(x, path) {
       openxlsx::saveWorkbook(wb, path, overwrite = TRUE)
     }
   )
+  invisible(path)
+}
+
+# Credamo uses question text as SPSS variable names, often with full-width
+# punctuation ("？", "，"). SPSS and readstat accept these names, but
+# haven::write_sav() refuses them, so in that case the data are written with
+# haven's own writer without the name check. Names and values are unchanged.
+write_sav_any <- function(data, path) {
+  tryCatch(haven::write_sav(data, path), error = function(e) {
+    if (!grepl("valid SPSS variable names", conditionMessage(e), fixed = TRUE)) stop(e)
+    adjust_tz <- utils::getFromNamespace("adjust_tz", "haven")
+    write_sav_ <- utils::getFromNamespace("write_sav_", "haven")
+    write_sav_(adjust_tz(data), normalizePath(path, mustWork = FALSE), compress = "byte")
+  })
   invisible(path)
 }
 

@@ -5,7 +5,9 @@ state_abb <- function(name) {
 }
 
 # Region code for each coordinate: "IT", "FR", ... and "USCT", "USNY", ... for
-# the United States. NA when the point falls outside all mapped countries.
+# the United States. The world map is coarse, so coastal points (e.g. Hangzhou,
+# Zhuhai) can fall just outside the coastline: these take the region of the
+# nearest land within about 50 km. NA when there is none.
 latlon_region <- function(lat, lon) {
   for (pkg in c("maps", "countrycode")) {
     if (!requireNamespace(pkg, quietly = TRUE)) {
@@ -18,20 +20,39 @@ latlon_region <- function(lat, lon) {
   out <- rep(NA_character_, length(lat))
   ok <- !is.na(lat) & !is.na(lon)
   if (!any(ok)) return(out)
+  out[ok] <- point_region(lat[ok], lon[ok])
 
-  world <- maps::map.where("world", lon[ok], lat[ok])
+  # Look around the unmatched points in rings of growing radius (degrees),
+  # eight directions each; the closest ring with land decides.
+  angles <- seq(0, 2 * pi, length.out = 9)[-9]
+  for (r in c(0.05, 0.1, 0.2, 0.3, 0.45)) {
+    miss <- which(ok & is.na(out))
+    if (!length(miss)) break
+    plat <- rep(lat[miss], each = 8)
+    # A degree of longitude is shorter away from the equator.
+    plon <- rep(lon[miss], each = 8) + r * cos(angles) / pmax(cos(plat * pi / 180), 0.1)
+    near <- matrix(point_region(plat + r * sin(angles), plon), nrow = 8)
+    out[miss] <- apply(near, 2, function(x) {
+      x <- x[!is.na(x)]
+      if (length(x)) names(sort(table(x), decreasing = TRUE))[1] else NA_character_
+    })
+  }
+  out
+}
+
+point_region <- function(lat, lon) {
+  world <- maps::map.where("world", lon, lat)
   country <- sub(":.*", "", world)
   iso <- suppressWarnings(countrycode::countrycode(country, "country.name", "iso2c"))
 
-  state <- state_abb(sub(":.*", "", maps::map.where("state", lon[ok], lat[ok])))
+  state <- state_abb(sub(":.*", "", maps::map.where("state", lon, lat)))
   # Alaska and Hawaii are not in the "state" map but are subregions of "USA".
   sub_state <- state_abb(sub("^[^:]*:?", "", world))
   state[is.na(state)] <- sub_state[is.na(state)]
 
   us <- !is.na(iso) & iso == "US" & !is.na(state)
   iso[us] <- paste0("US", state[us])
-  out[ok] <- iso
-  out
+  iso
 }
 
 ip_to_number <- function(ip) {

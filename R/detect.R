@@ -1,5 +1,5 @@
 # Column names (lower case, letters and digits only) that usually hold
-# identifiers in Qualtrics exports.
+# identifiers in Qualtrics and Credamo exports.
 id_column_names <- c(
   # MTurk
   workerid = "MTurk worker ID", assignmentid = "MTurk/Connect assignment ID",
@@ -18,7 +18,12 @@ id_column_names <- c(
   locationlongitude = "location (longitude)", recipientemail = "email",
   recipientfirstname = "name", recipientlastname = "name",
   externalreference = "external reference", externaldatareference = "external reference",
-  email = "email", emailaddress = "email"
+  email = "email", emailaddress = "email",
+  # Credamo (Chinese headers). 作答ID is the response ID, like Qualtrics'
+  # ResponseId, so it is not suggested.
+  "\u7528\u6237id" = "Credamo user ID", userid = "user ID",          # 用户ID
+  "\u7ecf\u5ea6" = "location (longitude)", "\u7eac\u5ea6" = "location (latitude)", # 经度, 纬度
+  "\u7701\u4efd" = "location (province)", "\u57ce\u5e02" = "location (city)"      # 省份, 城市
 )
 
 # Patterns that identify a whole cell as an identifier. Browser versions
@@ -30,12 +35,13 @@ id_patterns <- c(
   "IP address" = "^(?!.*\\.0\\.0\\.0$)(\\d{1,3}\\.){3}\\d{1,3}$|^[0-9a-fA-F:]*:[0-9a-fA-F:]+$"
 )
 
-normalize_name <- function(x) gsub("[^a-z0-9]", "", tolower(x))
+normalize_name <- function(x) gsub("[^\\p{L}\\p{N}]", "", tolower(x), perl = TRUE)
 
 #' Suggest columns that contain participant identifiers
 #'
 #' Looks at column names (e.g. `workerId`, `PROLIFIC_PID`, `participantId`,
-#' `IPAddress`, `LocationLatitude`, `RecipientEmail`) and at the content of
+#' `IPAddress`, `LocationLatitude`, `RecipientEmail`, and the Credamo user
+#' ID, longitude, latitude, province and city columns) and at the content of
 #' the columns (values that look like Prolific IDs, MTurk IDs, emails or IP
 #' addresses). Empty columns have nothing to mask, so they are left out unless
 #' `include_empty = TRUE`.
@@ -66,8 +72,8 @@ suggest_id_columns <- function(data, include_empty = FALSE) {
              empty = unname(empty), stringsAsFactors = FALSE)
 }
 
-is_latitude <- function(col) grepl("latitude", col, ignore.case = TRUE)
-is_longitude <- function(col) grepl("longitude", col, ignore.case = TRUE)
+is_latitude <- function(col) grepl("latitude|\u7eac\u5ea6", col, ignore.case = TRUE)
+is_longitude <- function(col) grepl("longitude|\u7ecf\u5ea6", col, ignore.case = TRUE)
 is_ip_column <- function(data, col) {
   if (normalize_name(col) == "ipaddress") return(TRUE)
   x <- trimws(as.character(data[[col]]))

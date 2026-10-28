@@ -69,6 +69,16 @@ test_that("country_state keeps country and US state", {
   expect_match(d$LocationLatitude[2], "^MSKIT")
 })
 
+test_that("coastal points just off the map take the nearest country", {
+  skip_if_not_installed("maps")
+  skip_if_not_installed("countrycode")
+  # Hangzhou, Zhuhai and Weihai fall in the sea on the coarse world map;
+  # the middle of the Atlantic has no land nearby.
+  expect_true(all(is.na(point_region(c(30.3205, 22.2159, 36.8720), c(120.3834, 113.5501, 121.7546)))))
+  expect_equal(latlon_region(c(30.3205, 22.2159, 36.8720, 0), c(120.3834, 113.5501, 121.7546, -30)),
+               c("CN", "CN", "CN", NA))
+})
+
 test_that("suggestions find identifier columns by name and content", {
   d <- data.frame(workerId = "A1B2C3D4E5F6G7", note = "hi", other = "x@y.com",
                   RecipientEmail = NA, stringsAsFactors = FALSE)
@@ -196,4 +206,65 @@ test_that("each run's files get the time it ran", {
   expect_true(all(file.exists(c(r1$output, r1$report, r1$key_file, r2$output, r2$report, r2$key_file))))
   expect_match(r2$key_file, "study_KEY_2026-01-01_10-05[.]txt$")
   expect_false(identical(r1$data$PROLIFIC_PID, r2$data$PROLIFIC_PID))
+})
+
+# A small Credamo-style SPSS export: Chinese column names, some with
+# full-width punctuation, which haven::write_sav() alone refuses.
+fake_credamo <- function(dir) {
+  d <- data.frame(
+    a = c("oB5yZqDnXwd", "mnakKv6dNAO", "Q4Z2rX4b8Bv"),
+    b = c("5LwdoXve", "VMJbGkRM", "5LwdoXve"),
+    ip = c("120.219.185.45", "183.217.193.60", "120.219.185.45"),
+    lon = c("113.8067240", "12.4964", "113.8067240"),
+    lat = c("36.0512680", "41.9028", "36.0512680"),
+    prov = c("河南省", "江西省", "河南省"),
+    city = c("安阳市", "赣州市", "安阳市"),
+    q = c(30, 41, 30),
+    stringsAsFactors = FALSE
+  )
+  names(d) <- c("作答ID", "用户ID", "IP", "经度", "纬度",
+                "省份", "城市", "您的年龄是？")
+  attr(d[[8]], "label") <- "您的年龄是？"
+  path <- file.path(dir, "credamo.sav")
+  write_sav_any(d, path)
+  path
+}
+
+test_that("SPSS files with Credamo variable names can be written", {
+  dir <- withr_tempdir()
+  path <- fake_credamo(dir)
+  expect_error(haven::write_sav(haven::read_sav(path), file.path(dir, "x.sav")), "variable names")
+  back <- haven::read_sav(path)
+  expect_equal(names(back)[8], "您的年龄是？")
+  expect_equal(attr(back[[8]], "label"), "您的年龄是？")
+  expect_equal(as.numeric(back[[8]]), c(30, 41, 30))
+})
+
+test_that("Credamo identifier columns are suggested, but not the response ID", {
+  dir <- withr_tempdir()
+  d <- haven::read_sav(fake_credamo(dir))
+  s <- suggest_id_columns(d)
+  expect_equal(s$column, names(d)[2:7])
+  expect_true(is_latitude(names(d)[5]) && is_longitude(names(d)[4]))
+})
+
+test_that("Credamo exports are masked, coded by country, and reidentified", {
+  skip_if_not_installed("maps")
+  skip_if_not_installed("countrycode")
+  local_mocked_bindings(time_stamp = function() "2026-01-01_10-00")
+  dir <- withr_tempdir()
+  path <- fake_credamo(dir)
+  res <- mask_survey(path, columns = "suggested", ip = "full", latlon = "country_state")
+  d <- haven::read_sav(res$output)
+  orig <- haven::read_sav(path)
+  expect_equal(names(d), names(orig))
+  expect_equal(d[[1]], orig[[1]])
+  expect_match(d[[2]], "^MSK[A-Za-z0-9]{32,}$")
+  expect_equal(d[[2]][1], d[[2]][3])
+  expect_match(d[[5]], "^MSK(CN|IT)")
+  expect_match(d[[5]][2], "^MSKIT")
+  expect_equal(d[[6]][1], d[[6]][3])
+  expect_false(d[[6]][1] == d[[6]][2])
+  back <- haven::read_sav(reidentify(res$output, key_file = res$key_file)$output)
+  expect_equal(lapply(back, as.character), lapply(orig, as.character), ignore_attr = TRUE)
 })

@@ -4,7 +4,7 @@
 
 Mask participant identifiers in survey exports before sharing them.
 
-**Currently supports Qualtrics exports** (CSV, SPSS `.sav` and Excel `.xlsx`).
+**Currently supports Qualtrics exports** (CSV, SPSS `.sav` and Excel `.xlsx`), with experimental support for Credamo exports (SPSS `.sav` with Chinese column names).
 Support for other survey tools is planned.
 
 Prolific, CloudResearch Connect and MTurk IDs, IP addresses, locations and

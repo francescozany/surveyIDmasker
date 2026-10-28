@@ -18,7 +18,8 @@ whether the column is \code{empty}.
 }
 \description{
 Looks at column names (e.g. \code{workerId}, \code{PROLIFIC_PID}, \code{participantId},
-\code{IPAddress}, \code{LocationLatitude}, \code{RecipientEmail}) and at the content of
+\code{IPAddress}, \code{LocationLatitude}, \code{RecipientEmail}, and the Credamo user
+ID, longitude, latitude, province and city columns) and at the content of
 the columns (values that look like Prolific IDs, MTurk IDs, emails or IP
 addresses). Empty columns have nothing to mask, so they are left out unless
 \code{include_empty = TRUE}.
