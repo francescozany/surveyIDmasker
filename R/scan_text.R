@@ -44,6 +44,9 @@ scan_text <- function(data, columns = names(data), known_ids = character()) {
 # Replaces identifiers found inside text with their masked codes.
 mask_in_text <- function(x, cb, known_ids = character()) {
   x <- as.character(x)
+  # regmatches<- turns NA into the text "NA", so empty cells are set aside.
+  na <- is.na(x)
+  x[na] <- ""
   for (pattern in text_patterns) {
     m <- gregexpr(pattern, x, perl = TRUE)
     regmatches(x, m) <- lapply(regmatches(x, m), function(found) {
@@ -55,6 +58,7 @@ mask_in_text <- function(x, cb, known_ids = character()) {
     has <- !is.na(x) & grepl(id, x, fixed = TRUE)
     if (any(has)) x[has] <- gsub(id, paste0("MSK", codes_for(cb, id)), x[has], fixed = TRUE)
   }
+  x[na] <- NA
   x
 }
 

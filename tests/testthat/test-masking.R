@@ -41,7 +41,7 @@ test_that("CSV export keeps header rows and masks consistently across columns", 
                         ip = "full", latlon = "full", scan_text = TRUE, mask_text = TRUE)
   raw <- readLines(res$output)
   expect_equal(raw[1:3], readLines(path)[1:3])
-  d <- read_qualtrics(res$output)$data
+  d <- read_survey(res$output)$data
   expect_equal(d$PROLIFIC_PID[1], d$participantId[1])
   expect_equal(d$PROLIFIC_PID[1], d$PROLIFIC_PID[3])
   expect_equal(d$participantId[2], "MSKblank")
@@ -64,7 +64,7 @@ test_that("country_state keeps country and US state", {
   path <- fake_export(dir)
   res <- mask_survey(path, columns = c("LocationLatitude", "LocationLongitude"),
                         latlon = "country_state", scan_text = FALSE)
-  d <- read_qualtrics(res$output)$data
+  d <- read_survey(res$output)$data
   expect_match(d$LocationLatitude, "^MSK(USCT|IT)[A-Za-z0-9]{12,}$")
   expect_match(d$LocationLatitude[2], "^MSKIT")
 })
@@ -87,6 +87,14 @@ test_that("suggestions find identifier columns by name and content", {
   s <- suggest_id_columns(d, include_empty = TRUE)
   expect_equal(s$column, c("workerId", "other", "RecipientEmail"))
   expect_equal(s$empty, c(FALSE, FALSE, TRUE))
+})
+
+test_that("columns named just id are suggested, but not ResponseId", {
+  for (nm in c("id", "Id", "ID")) {
+    d <- data.frame(x = c("p1", "p2"), ResponseId = c("R_1", "R_2"), q = 1:2)
+    names(d)[1] <- nm
+    expect_equal(suggest_id_columns(d)$column, nm)
+  }
 })
 
 test_that("list_columns marks empty identifier columns", {
@@ -113,6 +121,14 @@ test_that("SPSS files keep variable labels", {
   expect_equal(back$age, c(30, 40), ignore_attr = TRUE)
 })
 
+test_that("masking inside text leaves empty cells empty", {
+  cb <- new_codebook(derive_key(openssl::rand_bytes(32)))
+  out <- mask_in_text(c(NA, "ip 1.2.3.4", "fine"), cb)
+  expect_true(is.na(out[1]))
+  expect_match(out[2], "^ip MSK")
+  expect_equal(out[3], "fine")
+})
+
 test_that("browser versions are not taken for IP addresses", {
   d <- data.frame(MetaInfo_Version = c("145.0.0.0", "143.0.0.0"), ip = c("1.2.3.4", "5.6.7.8"))
   expect_equal(suggest_id_columns(d)$column, "ip")
@@ -123,13 +139,13 @@ test_that("columns can be given by number or as \"suggested\"", {
   dir <- withr_tempdir()
   path <- fake_export(dir)
   res <- mask_survey(path, columns = c(2, 5), ip = "full", scan_text = FALSE)
-  d <- read_qualtrics(res$output)$data
+  d <- read_survey(res$output)$data
   expect_match(d$PROLIFIC_PID, "^MSK")
   expect_equal(d$LocationLatitude[1], "41.3083")
   expect_error(mask_survey(path, columns = 99, overwrite = TRUE), "out of range")
   res <- mask_survey(path, columns = "suggested", ip = "full", latlon = "full",
                         scan_text = FALSE, overwrite = TRUE, key_file = res$key_file)
-  expect_match(read_qualtrics(res$output)$data$participantId[1], "^MSK")
+  expect_match(read_survey(res$output)$data$participantId[1], "^MSK")
 })
 
 test_that("country of IP addresses comes from a DB-IP file", {
@@ -141,7 +157,7 @@ test_that("country of IP addresses comes from a DB-IP file", {
   path <- fake_export(dir)
   res <- mask_survey(path, columns = "IPAddress", ip = "country_state",
                         ip_db = db, scan_text = FALSE)
-  d <- read_qualtrics(res$output)$data
+  d <- read_survey(res$output)$data
   expect_match(d$IPAddress, "^MSK(USCT|IT)[A-Za-z0-9]{12,}$")
   expect_match(d$IPAddress[2], "^MSKIT")
   expect_error(mask_survey(path, columns = "IPAddress", ip = "country_state",
@@ -156,7 +172,7 @@ test_that("ip/latlon are checked, and ignored when there is nothing to apply the
                               latlon = "everything"), "must be")
   res <- mask_survey(path, columns = "PROLIFIC_PID", ip = "country_state",
                         latlon = "country_state", scan_text = FALSE)
-  expect_match(read_qualtrics(res$output)$data$PROLIFIC_PID, "^MSK")
+  expect_match(read_survey(res$output)$data$PROLIFIC_PID, "^MSK")
 })
 
 test_that("reidentify restores every original value with the key", {

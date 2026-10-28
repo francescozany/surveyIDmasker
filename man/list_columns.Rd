@@ -2,12 +2,12 @@
 % Please edit documentation in R/mask_survey.R
 \name{list_columns}
 \alias{list_columns}
-\title{List the columns of a Qualtrics export with their numbers}
+\title{List the columns of a survey file with their numbers}
 \usage{
 list_columns(file)
 }
 \arguments{
-\item{file}{Path to a Qualtrics export.}
+\item{file}{Path to a survey data file (.csv, .sav or .xlsx).}
 }
 \value{
 Invisibly, a data frame with \code{number}, \code{column}, \code{suggested} and

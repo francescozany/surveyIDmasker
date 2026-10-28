@@ -4,8 +4,11 @@
 
 Mask participant identifiers in survey exports before sharing them.
 
-**Currently supports Qualtrics exports** (CSV, SPSS `.sav` and Excel `.xlsx`), with experimental support for Credamo exports (SPSS `.sav` with Chinese column names).
-Support for other survey tools is planned.
+**Works with survey data files** in CSV, SPSS `.sav` and Excel `.xlsx`
+format: for example Qualtrics exports (extra header rows are kept), Credamo
+exports (Chinese column names) and lab data files with one header row.
+Tested so far on Qualtrics, Credamo and lab data; support for other survey
+tools will be checked as we go.
 
 Prolific, CloudResearch Connect and MTurk IDs, IP addresses, locations and
 emails are replaced with `MSK` plus an encrypted code, for example
@@ -31,7 +34,7 @@ mask_survey()
 
 That's it. You will be asked to:
 
-1. pick your Qualtrics export (`.csv`, `.sav` or `.xlsx`);
+1. pick your survey file (`.csv`, `.sav` or `.xlsx`);
 2. confirm the suggested identifier columns (press Enter), or type `e` to choose them yourself;
 3. choose how to mask IP addresses and locations:
    - **fully**, like the other identifiers, or
@@ -79,7 +82,7 @@ After every run, the console prints the one-line command that repeats it.
 - **Spotting repeat participants**: the same platform ID code
   (`workerId`, `PROLIFIC_PID`, `participantId`) means the same person. Equal
   IP or location codes only mean the same network or the same estimated
-  place (Qualtrics locations are approximate), so treat them as supporting
+  place (survey platforms only estimate locations), so treat them as supporting
   evidence, not proof.
 - **Unknown places**: a location that can't be matched to a country gets a
   plain `MSK...` code.
@@ -95,5 +98,5 @@ After every run, the console prints the one-line command that repeats it.
 ## Cite
 
 > Zanibellato, F. (2026). *surveyIDmasker: Mask participant identifiers in
-> survey exports* (Version 0.1.0). Zenodo.
+> survey exports* (Version 0.2.0). Zenodo.
 > https://doi.org/10.5281/zenodo.23599338

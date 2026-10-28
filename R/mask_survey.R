@@ -22,7 +22,7 @@
 #'
 #' `<date>_<time>` is when the run started, e.g. `2026-10-23_14-53`.
 #'
-#' @param file Path to a Qualtrics export (.csv, .sav or .xlsx). If `NULL`, a
+#' @param file Path to a survey data file (.csv, .sav or .xlsx). If `NULL`, a
 #'   file chooser opens.
 #' @param columns Columns to mask: names (`c("workerId", "IPAddress")`),
 #'   numbers (`c(4, 14, 15)`, as shown by [list_columns()]) or `"suggested"`
@@ -68,11 +68,11 @@ mask_survey <- function(file = NULL, columns = NULL, ip = NULL, latlon = NULL,
   }
   if (is.null(file)) {
     if (!ask) stop("Please give the path of the file to mask.")
-    cat("Choose the Qualtrics export to mask (.csv, .sav or .xlsx)...\n")
+    cat("Choose the survey file to mask (.csv, .sav or .xlsx)...\n")
     file <- file.choose()
     if (tolower(basename(file)) %in% quit_words && !file.exists(file)) quit_masking()
   }
-  x <- read_qualtrics(file, header_rows)
+  x <- read_survey(file, header_rows)
   data <- x$data
   cat(sprintf("Read %s: %d rows, %d columns.\n", basename(file), nrow(data), ncol(data)))
 
@@ -190,7 +190,7 @@ mask_survey <- function(file = NULL, columns = NULL, ip = NULL, latlon = NULL,
   }
 
   x$data <- data
-  write_qualtrics(x, out_path)
+  write_survey(x, out_path)
   if (new_key) write_key_file(key$secret, key_file, used_for = basename(file))
   write_report(report_path, file, out_path, nrow(data), columns,
                if (length(ip_cols)) ip, if (has_pair) latlon,
@@ -314,18 +314,18 @@ write_report <- function(path, input, output, n_rows, columns, ip, latlon,
   writeLines(lines, path)
 }
 
-#' List the columns of a Qualtrics export with their numbers
+#' List the columns of a survey file with their numbers
 #'
 #' Use the numbers in `mask_survey(columns = ...)`. Suggested identifier
 #' columns are marked with `*`; identifier columns with no data also show
 #' `(empty)`.
 #'
-#' @param file Path to a Qualtrics export.
+#' @param file Path to a survey data file (.csv, .sav or .xlsx).
 #' @return Invisibly, a data frame with `number`, `column`, `suggested` and
 #'   `empty`.
 #' @export
 list_columns <- function(file) {
-  data <- read_qualtrics(file)$data
+  data <- read_survey(file)$data
   found <- suggest_id_columns(data, include_empty = TRUE)
   empty <- found$column[found$empty]
   out <- data.frame(number = seq_along(data), column = names(data),

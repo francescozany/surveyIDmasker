@@ -12,11 +12,12 @@ detect_header_rows <- function(raw) {
   1L
 }
 
-#' Read a Qualtrics export
+#' Read a survey data file
 #'
-#' Reads a CSV, SPSS (.sav) or Excel (.xlsx) file exported from Qualtrics,
-#' keeping the extra header rows (question text, ImportId) so the file can be
-#' written back unchanged apart from the masked columns.
+#' Reads a CSV, SPSS (.sav) or Excel (.xlsx) survey file (e.g. a Qualtrics or
+#' Credamo export, or lab data), keeping any extra header rows (in Qualtrics,
+#' question text and ImportId) so the file can be written back unchanged apart
+#' from the masked columns.
 #'
 #' @param path Path to the file.
 #' @param header_rows Number of header rows in CSV/Excel files. Detected
@@ -24,7 +25,7 @@ detect_header_rows <- function(raw) {
 #' @return A list with `data` (a data frame), `header` (extra header rows, if
 #'   any), `names` (original column names) and `format`.
 #' @export
-read_qualtrics <- function(path, header_rows = NULL) {
+read_survey <- function(path, header_rows = NULL) {
   if (!file.exists(path)) stop("File not found: ", path)
   ext <- tolower(tools::file_ext(path))
   switch(ext,
@@ -32,7 +33,7 @@ read_qualtrics <- function(path, header_rows = NULL) {
     sav = list(data = haven::read_sav(path), header = NULL, format = "sav",
                names = NULL),
     xlsx = read_q_xlsx(path, header_rows),
-    stop("Unsupported file type '.", ext, "'. Use a .csv, .sav or .xlsx export.")
+    stop("Unsupported file type '.", ext, "'. Use a .csv, .sav or .xlsx file.")
   )
 }
 
@@ -66,7 +67,7 @@ read_q_xlsx <- function(path, header_rows) {
        format = "xlsx", sheet = readxl::excel_sheets(path)[1])
 }
 
-write_qualtrics <- function(x, path) {
+write_survey <- function(x, path) {
   switch(x$format,
     csv = {
       header <- x$header

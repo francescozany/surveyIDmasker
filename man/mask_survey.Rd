@@ -19,7 +19,7 @@ mask_survey(
 )
 }
 \arguments{
-\item{file}{Path to a Qualtrics export (.csv, .sav or .xlsx). If \code{NULL}, a
+\item{file}{Path to a survey data file (.csv, .sav or .xlsx). If \code{NULL}, a
 file chooser opens.}
 
 \item{columns}{Columns to mask: names (\code{c("workerId", "IPAddress")}),

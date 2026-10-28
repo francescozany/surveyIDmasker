@@ -25,7 +25,7 @@
 reidentify <- function(file, key_file, output = NULL, overwrite = FALSE,
                        header_rows = NULL) {
   key <- read_key_file(key_file)
-  x <- read_qualtrics(file, header_rows)
+  x <- read_survey(file, header_rows)
   data <- x$data
 
   # "study_masked_2026-10-23_14-53.csv" -> "study_reidentified_<now>.csv"
@@ -77,7 +77,7 @@ reidentify <- function(file, key_file, output = NULL, overwrite = FALSE,
   }
 
   x$data <- data
-  write_qualtrics(x, out_path)
+  write_survey(x, out_path)
   cat(sprintf("Restored %d value(s) in %d column(s): %s\n", restored, length(changed),
               paste(changed, collapse = ", ")))
   if (unknown) message("Note: ", unknown, " code(s) were not made with this key and were left unchanged.")

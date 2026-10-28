@@ -1,10 +1,10 @@
 {
   "title": "surveyIDmasker: Mask participant identifiers in survey exports",
-  "description": "R package that replaces participant identifiers in survey exports (Prolific, CloudResearch Connect and MTurk IDs, IP addresses, locations, emails) with codes made by encrypting each value with a private key. Repeated participants remain recognizable, and the authors, who keep the key, can turn the codes back into the original identifiers. Reads and writes the CSV, SPSS and Excel files exported by Qualtrics.",
+  "description": "R package that replaces participant identifiers in survey exports (Prolific, CloudResearch Connect and MTurk IDs, IP addresses, locations, emails) with codes made by encrypting each value with a private key. Repeated participants remain recognizable, and the authors, who keep the key, can turn the codes back into the original identifiers. Reads and writes survey data files in CSV, SPSS and Excel format, such as exports from Qualtrics or Credamo and lab data files.",
   "upload_type": "software",
   "creators": [
     {"name": "Zanibellato, Francesco", "affiliation": "Georgetown University"}
   ],
   "license": "MIT",
-  "keywords": ["R", "survey", "Qualtrics", "anonymization", "de-identification", "Prolific", "MTurk", "CloudResearch Connect", "research data sharing"]
+  "keywords": ["R", "survey", "Qualtrics", "Credamo", "anonymization", "de-identification", "Prolific", "MTurk", "CloudResearch Connect", "research data sharing"]
 }

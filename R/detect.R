@@ -1,5 +1,6 @@
 # Column names (lower case, letters and digits only) that usually hold
-# identifiers in Qualtrics and Credamo exports.
+# identifiers in survey files (Qualtrics, Credamo, Prolific/MTurk/Connect
+# data, lab data).
 id_column_names <- c(
   # MTurk
   workerid = "MTurk worker ID", assignmentid = "MTurk/Connect assignment ID",
@@ -11,7 +12,7 @@ id_column_names <- c(
   participantid = "Prolific/Connect participant ID", projectid = "Connect project ID",
   cloudresearchid = "CloudResearch ID", connectid = "Connect ID",
   # Generic
-  pid = "participant ID", aid = "participant ID", rid = "participant ID",
+  id = "participant ID", pid = "participant ID", aid = "participant ID", rid = "participant ID",
   randomid = "random ID", completioncode = "completion code",
   # Qualtrics built-in
   ipaddress = "IP address", locationlatitude = "location (latitude)",

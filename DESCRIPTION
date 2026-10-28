@@ -1,6 +1,6 @@
 Package: surveyIDmasker
 Title: Mask Participant Identifiers in Survey Exports
-Version: 0.1.0
+Version: 0.2.0
 Authors@R:
     person("Francesco", "Zanibellato", email = "fz150@georgetown.edu",
            role = c("aut", "cre"))
@@ -9,8 +9,9 @@ Description: Replaces participant identifiers in survey exports (Prolific,
     with codes prefixed by "MSK", made by encrypting each value with a private
     key. Data can be shared without disclosing identities while repeated
     participants remain recognizable, and the authors, who keep the key, can
-    turn the codes back into the original identifiers. Reads and writes the
-    CSV, SPSS (.sav) and Excel (.xlsx) files exported by Qualtrics.
+    turn the codes back into the original identifiers. Reads and writes
+    survey data files in CSV, SPSS (.sav) and Excel (.xlsx) format, such as
+    exports from Qualtrics or Credamo and lab data files.
 License: MIT + file LICENSE
 Encoding: UTF-8
 Roxygen: list(markdown = TRUE)
