@@ -13,12 +13,13 @@ reidentify(
 )
 }
 \arguments{
-\item{file}{Path to a masked file (.csv, .sav or .xlsx).}
+\item{file}{Path to a masked file (.csv, .sav, .dta or .xlsx), a vector of such
+paths, or a folder (all masked files in it).}
 
 \item{key_file}{Path to the key file used to mask it
 (\verb{<name>_KEY_<date>_<time>.txt}).}
 
-\item{output}{Path of the re-identified file. Defaults to
+\item{output}{Path of the re-identified file (one file only). Defaults to
 \verb{<name>_reidentified_<date>_<time>.<ext>}.}
 
 \item{overwrite}{Replace an existing output file.}
@@ -28,18 +29,23 @@ automatically).}
 }
 \value{
 Invisibly, a list with the re-identified \code{data} and the \code{output}
-path.
+path. With several files, \code{data} is a list and \code{output} a vector, both
+named by file.
 }
 \description{
 Reads a file masked by \code{\link[=mask_survey]{mask_survey()}} and, using the private key file,
 replaces every \code{MSK} code (also inside free text) with the original value.
 \code{MSKblank} becomes an empty cell again. Codes made with a different key are
 left as they are. The masked file is not changed; the result is written to
-\verb{<name>_reidentified_<date>_<time>.<ext>}.
+\verb{<name>_reidentified_<date>_<time>.<ext>}. Several files masked with the
+same key can be given at once.
 }
 \examples{
 \dontrun{
 reidentify("my_study_masked_2026-10-23_14-53.csv",
            key_file = "my_study_KEY_2026-10-23_14-53.txt")
+reidentify(c("study1_masked_2026-11-01_14-30.csv",
+             "study2_masked_2026-11-01_14-30.sav"),
+           key_file = "batch_KEY_2026-11-01_14-30.txt")
 }
 }

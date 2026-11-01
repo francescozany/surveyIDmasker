@@ -17,7 +17,7 @@ A list with \code{data} (a data frame), \code{header} (extra header rows, if
 any), \code{names} (original column names) and \code{format}.
 }
 \description{
-Reads a CSV, SPSS (.sav) or Excel (.xlsx) survey file (e.g. a Qualtrics or
+Reads a CSV, SPSS (.sav), Stata (.dta) or Excel (.xlsx) survey file (e.g. a Qualtrics or
 Credamo export, or lab data), keeping any extra header rows (in Qualtrics,
 question text and ImportId) so the file can be written back unchanged apart
 from the masked columns.

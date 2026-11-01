@@ -4,8 +4,8 @@
 
 Mask participant identifiers in survey exports before sharing them.
 
-**Works with survey data files** in CSV, SPSS `.sav` and Excel `.xlsx`
-format: for example Qualtrics exports (extra header rows are kept), Credamo
+**Works with survey data files** in CSV, SPSS `.sav`, Stata `.dta` and Excel
+`.xlsx` format: for example Qualtrics exports (extra header rows are kept), Credamo
 exports (Chinese column names) and lab data files with one header row.
 Tested so far on Qualtrics, Credamo and lab data; support for other survey
 tools will be checked as we go.
@@ -20,9 +20,6 @@ so repeat participants can still be spotted. Blank cells become `MSKblank`.
 ```r
 install.packages("remotes")
 remotes::install_github("francescozany/surveyIDmasker")
-
-# Only needed to keep country/state in masked locations:
-install.packages(c("maps", "countrycode"))
 ```
 
 ## Use
@@ -34,11 +31,14 @@ mask_survey()
 
 That's it. You will be asked to:
 
-1. pick your survey file (`.csv`, `.sav` or `.xlsx`);
+1. pick your survey file (`.csv`, `.sav`, `.dta` or `.xlsx`). To mask several files
+   using the same key, select them together (Cmd-click on a Mac, Ctrl-click
+   on Windows);
 2. confirm the suggested identifier columns (press Enter), or type `e` to choose them yourself;
 3. choose how to mask IP addresses and locations:
    - **fully**, like the other identifiers, or
-   - **keeping the country**, and the state for the US: `MSKUSCT...` (Connecticut), `MSKIT...` (Italy).
+   - **keeping the country**, and the state for the US: `MSKUS-CT_...` (Connecticut), `MSKIT_...` (Italy).
+     The region always ends at `_`.
 
 Changed your mind? Type `q` at any question (or press Esc) to exit.
 Nothing is saved until the end.
@@ -46,10 +46,46 @@ Nothing is saved until the end.
 Files written (the original is never changed):
 
 - `<name>_masked_<date>_<time>.<ext>`: the file to share;
-- `<name>_masked_<date>_<time>_report.txt`: what was masked and when;
+- `<name>_masked_<date>_<time>_report.txt`: what was masked, when, and with
+  which key (shown only by the time it was created), plus a sentence ready to
+  paste into your methods section or replication README;
 - `<name>_KEY_<date>_<time>.txt`: the private key. **Keep it, never share it.**
 
 `<date>_<time>` is when you ran it, e.g. `my_study_masked_2026-10-23_14-53.csv`.
+
+### Several files with the same key
+
+Mask several studies in one run, so the same participant gets the same code
+in all of them:
+
+```r
+mask_survey(c("study1.csv", "study2.sav", "pilot.xlsx"), columns = "suggested")
+mask_survey("my_project_folder", columns = "suggested")   # every survey file in it
+```
+
+In the guided mode, select several files at once in the file window
+(Cmd-click on a Mac, Ctrl-click on Windows; on a Mac the window may open
+behind RStudio). Columns are chosen file by file; how IP addresses and
+locations are masked is asked once for all files.
+
+Finer control is in the one-line form: files from different folders, a whole
+folder, columns for each file, or different IP/location rules for each file
+(e.g. studies with different IRB rules on what can be shared):
+
+```r
+mask_survey(c("study1.csv", "other_folder/study2.sav"),
+            columns = list(study1.csv = "suggested", study2.sav = c("PROLIFIC_PID", "IPAddress")),
+            ip = "full",
+            latlon = list(study1.csv = "country_state", study2.sav = "full"))
+```
+
+A run with several files writes one masked file next to each original, plus,
+in the folder of the first file, one `batch_KEY_<date>_<time>.txt` and one
+`batch_masked_<date>_<time>_report.txt`. The report lists every file with its
+masked columns and checksum, and says that all were masked with the same key,
+identified only by when it was created (the key itself is never shown). The
+key file keeps the list of every file masked with it. `reidentify()` also takes
+several files at once.
 
 ### In one line (scripts, AI agents)
 
@@ -91,12 +127,23 @@ After every run, the console prints the one-line command that repeats it.
   `ip_db = "path/to/dbip-city-lite.csv"`. Reading it takes about 20 seconds.
   IP geolocation by DB-IP (db-ip.com), CC BY 4.0: please credit it if you use it.
 - **Free text**: other columns are checked for things that look like IDs,
-  emails or IP addresses (participants sometimes type their ID in comments).
-  Use `mask_text = TRUE` to replace them as well.
-- Your survey responses never leave your computer.
+  emails, IP addresses or phone numbers (participants sometimes type their ID
+  in comments). Use `mask_text = TRUE` to replace them as well.
+- **Location details** such as `zip`, `city` or `region` columns (added by
+  some geolocation steps) are suggested too: a zip code can identify a person.
+- **CSV files must be UTF-8**, as Qualtrics and most tools save them. Other
+  encodings (e.g. CSVs saved by Excel in China) are refused with an error:
+  save the file again as "CSV UTF-8" first.
+- **Excel files: only the first sheet** is read and written. If your file has
+  other sheets, they are not in the masked file: keep the data on one sheet,
+  or save each sheet as its own file.
+- **Before sharing**, `check_survey("my_study_masked_....csv")` lists anything
+  that still looks identifying.
+- Your survey responses never leave your computer. How the codes are made is
+  explained in [CODES.md](CODES.md).
 
 ## Cite
 
 > Zanibellato, F. (2026). *surveyIDmasker: Mask participant identifiers in
-> survey exports* (Version 0.2.0). Zenodo.
+> survey exports* (Version 0.3.0). Zenodo.
 > https://doi.org/10.5281/zenodo.23599338

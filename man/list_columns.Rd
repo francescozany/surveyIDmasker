@@ -7,7 +7,7 @@
 list_columns(file)
 }
 \arguments{
-\item{file}{Path to a survey data file (.csv, .sav or .xlsx).}
+\item{file}{Path to a survey data file (.csv, .sav, .dta or .xlsx).}
 }
 \value{
 Invisibly, a data frame with \code{number}, \code{column}, \code{suggested} and

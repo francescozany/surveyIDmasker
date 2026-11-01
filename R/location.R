@@ -4,17 +4,11 @@ state_abb <- function(name) {
   abb[match(tolower(trimws(name)), full)]
 }
 
-# Region code for each coordinate: "IT", "FR", ... and "USCT", "USNY", ... for
-# the United States. The world map is coarse, so coastal points (e.g. Hangzhou,
+# Region code for each coordinate: "IT", "FR", ... and "US-CT", "US-NY", ...
+# (ISO 3166-2) for the United States. The world map is coarse, so coastal points (e.g. Hangzhou,
 # Zhuhai) can fall just outside the coastline: these take the region of the
 # nearest land within about 50 km. NA when there is none.
 latlon_region <- function(lat, lon) {
-  for (pkg in c("maps", "countrycode")) {
-    if (!requireNamespace(pkg, quietly = TRUE)) {
-      stop("latlon = \"country_state\" needs the '", pkg, "' package: ",
-           "install.packages(\"", pkg, "\")")
-    }
-  }
   lat <- suppressWarnings(as.numeric(lat))
   lon <- suppressWarnings(as.numeric(lon))
   out <- rep(NA_character_, length(lat))
@@ -51,7 +45,7 @@ point_region <- function(lat, lon) {
   state[is.na(state)] <- sub_state[is.na(state)]
 
   us <- !is.na(iso) & iso == "US" & !is.na(state)
-  iso[us] <- paste0("US", state[us])
+  iso[us] <- paste0("US-", state[us])
   iso
 }
 
@@ -96,6 +90,6 @@ ip_region <- function(ip, db) {
   out[out %in% "ZZ"] <- NA  # DB-IP code for unknown
   st <- state_abb(db$state[i[hit]])
   us <- out[hit] == "US" & !is.na(st)
-  out[hit][us] <- paste0("US", st[us])
+  out[hit][us] <- paste0("US-", st[us])
   out
 }

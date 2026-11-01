@@ -14,7 +14,7 @@ detect_header_rows <- function(raw) {
 
 #' Read a survey data file
 #'
-#' Reads a CSV, SPSS (.sav) or Excel (.xlsx) survey file (e.g. a Qualtrics or
+#' Reads a CSV, SPSS (.sav), Stata (.dta) or Excel (.xlsx) survey file (e.g. a Qualtrics or
 #' Credamo export, or lab data), keeping any extra header rows (in Qualtrics,
 #' question text and ImportId) so the file can be written back unchanged apart
 #' from the masked columns.
@@ -27,17 +27,21 @@ detect_header_rows <- function(raw) {
 #' @export
 read_survey <- function(path, header_rows = NULL) {
   if (!file.exists(path)) stop("File not found: ", path)
+  if (file.size(path) == 0) stop(basename(path), " is empty.", call. = FALSE)
   ext <- tolower(tools::file_ext(path))
   switch(ext,
     csv = read_q_csv(path, header_rows),
     sav = list(data = haven::read_sav(path), header = NULL, format = "sav",
                names = NULL),
+    dta = list(data = haven::read_dta(path), header = NULL, format = "dta",
+               names = NULL),
     xlsx = read_q_xlsx(path, header_rows),
-    stop("Unsupported file type '.", ext, "'. Use a .csv, .sav or .xlsx file.")
+    stop("Unsupported file type '.", ext, "'. Use a .csv, .sav, .dta or .xlsx file.")
   )
 }
 
 read_q_csv <- function(path, header_rows) {
+  check_utf8(path)
   raw <- readr::read_csv(path, col_names = FALSE, na = character(),
                          col_types = readr::cols(.default = "c"),
                          trim_ws = FALSE, progress = FALSE,
@@ -67,6 +71,20 @@ read_q_xlsx <- function(path, header_rows) {
        format = "xlsx", sheet = readxl::excel_sheets(path)[1])
 }
 
+# CSV files must be UTF-8 (with or without BOM), as Qualtrics and most tools
+# write them. Other encodings (e.g. GBK from Excel in China, or UTF-16) would
+# turn non-English text into garbage, so they are refused.
+check_utf8 <- function(path) {
+  bytes <- readBin(path, "raw", file.size(path))
+  if (length(bytes) >= 3 && identical(bytes[1:3], as.raw(c(0xef, 0xbb, 0xbf)))) bytes <- bytes[-(1:3)]
+  if (any(bytes == as.raw(0)) || !validUTF8(rawToChar(bytes[bytes != as.raw(0)]))) {
+    stop(basename(path), " is not saved as UTF-8 text, the encoding surveyIDmasker reads.\n",
+         "Save it again as UTF-8, e.g. in Excel: File > Save As > \"CSV UTF-8 (Comma delimited)\". ",
+         "Check afterwards that non-English text (e.g. Chinese) looks right.", call. = FALSE)
+  }
+  invisible(TRUE)
+}
+
 write_survey <- function(x, path) {
   switch(x$format,
     csv = {
@@ -82,6 +100,7 @@ write_survey <- function(x, path) {
       }
     },
     sav = write_sav_any(x$data, path),
+    dta = haven::write_dta(x$data, path),
     xlsx = {
       wb <- openxlsx::createWorkbook()
       openxlsx::addWorksheet(wb, x$sheet)

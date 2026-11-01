@@ -2,7 +2,7 @@
 % Please edit documentation in R/mask_survey.R
 \name{mask_survey}
 \alias{mask_survey}
-\title{Mask participant identifiers in a survey export}
+\title{Mask participant identifiers in survey files}
 \usage{
 mask_survey(
   file = NULL,
@@ -19,34 +19,43 @@ mask_survey(
 )
 }
 \arguments{
-\item{file}{Path to a survey data file (.csv, .sav or .xlsx). If \code{NULL}, a
-file chooser opens.}
+\item{file}{Path to a survey data file (.csv, .sav, .dta or .xlsx), a vector of
+such paths, or a folder (all survey files in it). If \code{NULL}, a file
+window opens; on macOS and Windows several files can be selected in it.
+\code{options(surveyIDmasker.multi_select = FALSE)} uses R's one-file window
+instead.}
 
 \item{columns}{Columns to mask: names (\code{c("workerId", "IPAddress")}),
-numbers (\code{c(4, 14, 15)}, as shown by \code{\link[=list_columns]{list_columns()}}) or \code{"suggested"}
-for the columns found by \code{\link[=suggest_id_columns]{suggest_id_columns()}}. If \code{NULL}, you are asked.}
+numbers (\code{c(4, 14, 15)}, as shown by \code{\link[=list_columns]{list_columns()}}; one file only) or
+\code{"suggested"} for the columns found by \code{\link[=suggest_id_columns]{suggest_id_columns()}} in each
+file. With several files, names are masked in every file that has them,
+and a list named by file (\code{list(study1.csv = "suggested", study2.sav = c("PROLIFIC_PID"))}) gives each file its own columns. If \code{NULL}, you are
+asked.}
 
 \item{ip}{How to mask IP addresses: \code{"full"} (like any other identifier) or
 \code{"country_state"} (keep the country, and the state for the US, e.g.
-\code{"MSKUSCT..."}, \code{"MSKIT..."}; needs \code{ip_db}).}
+\code{"MSKUS-CT_..."}, \code{"MSKIT_..."}; needs \code{ip_db}). With several files, one
+value applies to all; a list named by file (\code{list(study1.csv = "full", study2.sav = "country_state")}) sets each file's rule, e.g. when studies
+have different IRB rules on what can be shared. Files left out of the
+list are masked fully.}
 
 \item{latlon}{How to mask latitude/longitude: \code{"full"} or
-\code{"country_state"}.}
+\code{"country_state"}, or a list named by file, as for \code{ip}.}
 
 \item{ip_db}{Path to the free DB-IP "IP to City Lite" CSV file
 (\url{https://db-ip.com/db/lite.php}), needed for \code{ip = "country_state"}.}
 
 \item{key_file}{Path to an existing key file. Reusing a key gives the same
 codes for the same participants across studies. If \code{NULL}, a new key is
-created and saved as \verb{<name>_KEY_<date>_<time>.txt} next to the original
-file.}
+created.}
 
-\item{scan_text}{Look for identifiers typed into the other columns.}
+\item{scan_text}{Look for identifiers typed into the other columns (of all
+the files being masked).}
 
 \item{mask_text}{Also replace identifiers found in other columns with
 their codes.}
 
-\item{output}{Path of the masked file. Defaults to
+\item{output}{Path of the masked file (one file only). Defaults to
 \verb{<name>_masked_<date>_<time>.<ext>}.}
 
 \item{overwrite}{Replace existing output files.}
@@ -56,30 +65,40 @@ automatically).}
 }
 \value{
 Invisibly, a list with the masked \code{data} and the paths of the
-\code{output}, the \code{report} and the \code{key_file}.
+\code{output}, the \code{report} and the \code{key_file}. With several files, \code{data} is
+a list and \code{output} a vector, both named by file.
 }
 \description{
 Replaces identifiers (Prolific/Connect/MTurk IDs, IP addresses, locations,
 emails, ...) with \code{"MSK"} plus a code made by encrypting the value with a
-private key. The same value gets the same code everywhere in the file, so
-repeat participants can still be spotted. Blank cells become \code{"MSKblank"}.
+private key. The same value gets the same code everywhere, so repeat
+participants can still be spotted. Blank cells become \code{"MSKblank"}.
 Without the key the codes cannot be turned back; with it, \code{\link[=reidentify]{reidentify()}}
 restores the original identifiers.
 }
 \details{
+Several files can be masked at once using the same key: give a vector of
+files or a folder, or, in the guided mode, add more files after the first.
+The same identifier then gets the same code in every file.
+
 Run it with no arguments to be guided step by step. Anything you give as an
 argument is not asked, so a call with \code{file}, \code{columns}, \code{ip} and \code{latlon}
-runs without any questions (handy for scripts). At the end, the one-line
-command that repeats the same masking is printed.
+runs without any questions (handy for scripts). Nothing is written until
+every question is answered. At the end, the one-line command that repeats
+the same masking is printed.
 
-The original file is never changed. Files written:
+The original files are never changed. Files written:
 \itemize{
-\item \verb{<name>_masked_<date>_<time>.<ext>}: the data to share;
-\item \verb{<name>_masked_<date>_<time>_report.txt}: what was masked, when, and a
-SHA-256 checksum of the masked file;
-\item \verb{<name>_KEY_<date>_<time>.txt}, next to the original file (only when no
-\code{key_file} is given): the private key. Keep it with the original data and
-never share it.
+\item \verb{<name>_masked_<date>_<time>.<ext>}, next to each original: the data to
+share;
+\item the report: what was masked, when, with which key (identified only by the
+time it was created), and a SHA-256 checksum of each masked file. For one
+file it is \verb{<name>_masked_<date>_<time>_report.txt}; for several, one
+\verb{batch_masked_<date>_<time>_report.txt} in the folder of the first file;
+\item the private key, only when no \code{key_file} is given:
+\verb{<name>_KEY_<date>_<time>.txt} for one file, \verb{batch_KEY_<date>_<time>.txt}
+for several. Keep it with the original data and never share it. The key
+file also keeps a list of every file masked with it.
 }
 
 \verb{<date>_<time>} is when the run started, e.g. \verb{2026-10-23_14-53}.
@@ -91,5 +110,8 @@ mask_survey("my_study.sav", columns = c(4, 14, 15, 36),
                ip = "full", latlon = "country_state")
 mask_survey("my_study.csv", columns = "suggested", ip = "country_state",
                latlon = "country_state", ip_db = "dbip-city-lite.csv")
+# several files, one key, one report
+mask_survey(c("study1.csv", "study2.sav"), columns = "suggested")
+mask_survey("my_project_folder", columns = "suggested")
 }
 }

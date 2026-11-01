@@ -1,6 +1,6 @@
 Package: surveyIDmasker
 Title: Mask Participant Identifiers in Survey Exports
-Version: 0.2.0
+Version: 0.3.0
 Authors@R:
     person("Francesco", "Zanibellato", email = "fz150@georgetown.edu",
            role = c("aut", "cre"))
@@ -16,8 +16,10 @@ License: MIT + file LICENSE
 Encoding: UTF-8
 Roxygen: list(markdown = TRUE)
 Imports:
+    countrycode,
     digest,
     haven,
+    maps,
     openssl,
     openxlsx,
     readr,
@@ -27,8 +29,6 @@ Imports:
     stats,
     utils
 Suggests:
-    countrycode,
-    maps,
     testthat (>= 3.0.0)
 Config/testthat/edition: 3
 Config/roxygen2/version: 8.1.1

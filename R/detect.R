@@ -20,11 +20,18 @@ id_column_names <- c(
   recipientfirstname = "name", recipientlastname = "name",
   externalreference = "external reference", externaldatareference = "external reference",
   email = "email", emailaddress = "email",
+  # Location and contact details, e.g. added by a geolocation step
+  zip = "location (zip code)", zipcode = "location (zip code)",
+  postcode = "location (postal code)", postalcode = "location (postal code)",
+  city = "location (city)", region = "location (region)", areacode = "phone area code",
+  phone = "phone number", phonenumber = "phone number", telephone = "phone number",
   # Credamo (Chinese headers). 作答ID is the response ID, like Qualtrics'
   # ResponseId, so it is not suggested.
   "\u7528\u6237id" = "Credamo user ID", userid = "user ID",          # 用户ID
   "\u7ecf\u5ea6" = "location (longitude)", "\u7eac\u5ea6" = "location (latitude)", # 经度, 纬度
-  "\u7701\u4efd" = "location (province)", "\u57ce\u5e02" = "location (city)"      # 省份, 城市
+  "\u7701\u4efd" = "location (province)", "\u57ce\u5e02" = "location (city)",     # 省份, 城市
+  "\u624b\u673a\u53f7" = "phone number", "\u7535\u8bdd" = "phone number",            # 手机号, 电话
+  "\u90ae\u7bb1" = "email"                                                    # 邮箱
 )
 
 # Patterns that identify a whole cell as an identifier. Browser versions

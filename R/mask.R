@@ -8,21 +8,32 @@ min_plain_bytes <- 18
 # deterministic "synthetic IV" construction): the IV is an HMAC of the value,
 # so the same value always gives the same code, and the IV doubles as a check
 # that a code was made with this key. Only the key can decrypt a code.
-encrypt_code <- function(value, key) {
-  pt <- pad(charToRaw(enc2utf8(value)))
-  tag <- digest::hmac(key$mac, pt, algo = "sha256", raw = TRUE)[seq_len(tag_length)]
-  ct <- openssl::aes_ctr_encrypt(pt, key$enc, iv = c(tag, as.raw(rep(0, 16 - tag_length))))
-  raw_to_base62(c(tag, ct))
+encrypt_code <- function(value, key) encrypt_codes(value, key)
+
+encrypt_codes <- function(values, key) {
+  bytes <- lapply(values, function(value) {
+    pt <- pad(charToRaw(enc2utf8(value)))
+    tag <- hmac(key$mac, pt)[seq_len(tag_length)]
+    ct <- openssl::aes_ctr_encrypt(pt, key$enc, iv = c(tag, as.raw(rep(0, 16 - tag_length))))
+    c(tag, ct)
+  })
+  raw_to_base62(bytes)
 }
 
 # Returns the original value, or NA when the code was not made with this key.
-decrypt_code <- function(code, key) {
-  bytes <- base62_to_raw(code)
+decrypt_code <- function(code, key) decrypt_codes(code, key)
+
+decrypt_codes <- function(codes, key) {
+  if (!length(codes)) return(character())
+  vapply(base62_to_raw(codes), decrypt_bytes, character(1), key = key)
+}
+
+decrypt_bytes <- function(bytes, key) {
   if (is.null(bytes) || length(bytes) <= tag_length) return(NA_character_)
   tag <- bytes[seq_len(tag_length)]
   ct <- bytes[-seq_len(tag_length)]
   pt <- openssl::aes_ctr_decrypt(ct, key$enc, iv = c(tag, as.raw(rep(0, 16 - tag_length))))
-  check <- digest::hmac(key$mac, pt, algo = "sha256", raw = TRUE)[seq_len(tag_length)]
+  check <- hmac(key$mac, pt)[seq_len(tag_length)]
   if (!identical(check, tag)) return(NA_character_)
   pt <- unpad(pt)
   if (is.null(pt)) return(NA_character_)
@@ -42,28 +53,51 @@ unpad <- function(bytes) {
 }
 
 # Base-62 (A-Z, a-z, 0-9) so codes stay alphanumeric. A leading 0x01 byte
-# keeps leading zero bytes from being lost.
+# keeps leading zero bytes from being lost. Both directions work on many
+# values at once.
 raw_to_base62 <- function(bytes) {
-  n <- openssl::bignum(c(as.raw(1), bytes))
-  zero <- openssl::bignum(0)
-  base <- openssl::bignum(62)
-  digits <- integer()
-  while (n > zero) {
-    digits <- c(as.integer(as.character(n %% base)), digits)
-    n <- n %/% base
-  }
-  paste(code_alphabet[digits + 1], collapse = "")
+  if (is.raw(bytes)) bytes <- list(bytes)
+  digits <- change_base(lapply(bytes, function(b) c(1L, as.integer(b))), 256L, 62L)
+  vapply(digits, function(d) paste(code_alphabet[d + 1], collapse = ""), character(1))
 }
 
-base62_to_raw <- function(code) {
-  d <- match(strsplit(code, "")[[1]], code_alphabet) - 1
-  if (!length(d) || anyNA(d)) return(NULL)
-  n <- openssl::bignum(0)
-  base <- openssl::bignum(62)
-  for (x in d) n <- n * base + openssl::bignum(x)
-  bytes <- as.raw(n)
-  if (!length(bytes) || bytes[1] != as.raw(1)) return(NULL)
-  bytes[-1]
+# A list with the bytes of each code, NULL for text that is not a code.
+base62_to_raw <- function(codes) {
+  d <- lapply(strsplit(codes, "", fixed = TRUE), function(x) match(x, code_alphabet) - 1L)
+  ok <- vapply(d, function(x) length(x) > 0 && !anyNA(x), logical(1))
+  out <- vector("list", length(codes))
+  if (!any(ok)) return(out)
+  bytes <- change_base(d[ok], 62L, 256L)
+  out[ok] <- lapply(bytes, function(b) if (length(b) && b[1] == 1L) as.raw(b[-1]) else NULL)
+  out
+}
+
+# Converts numbers written as digit vectors (most significant first) from one
+# base to another, by long division. Numbers with the same number of digits
+# are divided together, one column at a time.
+change_base <- function(numbers, from, to) {
+  out <- vector("list", length(numbers))
+  len <- lengths(numbers)
+  for (n in unique(len)) {
+    rows <- which(len == n)
+    m <- matrix(unlist(numbers[rows]), ncol = n, byrow = TRUE)
+    digits <- list()
+    alive <- rowSums(m) > 0
+    while (any(alive)) {
+      carry <- integer(nrow(m))
+      for (j in seq_len(n)) {
+        cur <- carry * from + m[, j]
+        m[, j] <- cur %/% to
+        carry <- cur %% to
+      }
+      digits[[length(digits) + 1]] <- ifelse(alive, carry, NA_integer_)
+      alive <- rowSums(m) > 0
+    }
+    d <- do.call(cbind, rev(digits))
+    if (is.null(d)) d <- matrix(integer(), nrow(m), 0)
+    out[rows] <- lapply(seq_len(nrow(d)), function(i) { x <- d[i, ]; x[!is.na(x)] })
+  }
+  out
 }
 
 # A codebook caches one code per distinct value for the whole run, so the
@@ -78,13 +112,22 @@ new_codebook <- function(key) {
 codes_for <- function(cb, keys) {
   new <- setdiff(unique(keys), names(cb$map))
   if (length(new)) {
-    codes <- vapply(new, encrypt_code, character(1), key = cb$key, USE.NAMES = FALSE)
-    cb$map <- c(cb$map, stats::setNames(codes, new))
+    cb$map <- c(cb$map, stats::setNames(encrypt_codes(new, cb$key), new))
   }
   unname(cb$map[keys])
 }
 
 is_blank <- function(x) is.na(x) | trimws(x) == ""
+
+# Values as text. Numbers are written in full ("100000", not "1e+05"), so an
+# ID stored as a number in SPSS, Stata or Excel gets the same code as the same
+# ID written in a CSV.
+id_text <- function(x) {
+  if (!is.numeric(x)) return(as.character(x))
+  vapply(unclass(x), function(v) {
+    if (is.na(v)) NA_character_ else format(v, scientific = FALSE, digits = 15, trim = TRUE)
+  }, character(1), USE.NAMES = FALSE)
+}
 
 #' Mask a vector of identifiers
 #'
@@ -107,8 +150,9 @@ mask_values <- function(x, key_file = NULL, prefix = "MSK") {
   mask_with(new_codebook(key), x, prefix = prefix)
 }
 
-mask_with <- function(cb, x, keys = trimws(as.character(x)), prefix = "MSK") {
-  x <- as.character(x)
+mask_with <- function(cb, x, keys = NULL, prefix = "MSK") {
+  x <- id_text(x)
+  if (is.null(keys)) keys <- trimws(x)
   prefix <- rep_len(prefix, length(x))
   out <- rep("MSKblank", length(x))
   ok <- !is_blank(x)

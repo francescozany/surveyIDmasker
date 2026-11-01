@@ -19,7 +19,7 @@ with a match). No matched values are returned.
 }
 \description{
 Scans text columns for strings that look like Prolific IDs, MTurk worker
-IDs, emails or IP addresses, and for any of the \code{known_ids} (e.g. the
+IDs, emails, IP addresses or phone numbers, and for any of the \code{known_ids} (e.g. the
 values of the columns being masked). Participants sometimes type their ID
 into open-ended answers.
 }

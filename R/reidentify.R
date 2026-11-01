@@ -4,27 +4,51 @@
 #' replaces every `MSK` code (also inside free text) with the original value.
 #' `MSKblank` becomes an empty cell again. Codes made with a different key are
 #' left as they are. The masked file is not changed; the result is written to
-#' `<name>_reidentified_<date>_<time>.<ext>`.
+#' `<name>_reidentified_<date>_<time>.<ext>`. Several files masked with the
+#' same key can be given at once.
 #'
-#' @param file Path to a masked file (.csv, .sav or .xlsx).
+#' @param file Path to a masked file (.csv, .sav, .dta or .xlsx), a vector of such
+#'   paths, or a folder (all masked files in it).
 #' @param key_file Path to the key file used to mask it
 #'   (`<name>_KEY_<date>_<time>.txt`).
-#' @param output Path of the re-identified file. Defaults to
+#' @param output Path of the re-identified file (one file only). Defaults to
 #'   `<name>_reidentified_<date>_<time>.<ext>`.
 #' @param overwrite Replace an existing output file.
 #' @param header_rows Number of header rows in CSV/Excel files (detected
 #'   automatically).
 #' @return Invisibly, a list with the re-identified `data` and the `output`
-#'   path.
+#'   path. With several files, `data` is a list and `output` a vector, both
+#'   named by file.
 #' @examples
 #' \dontrun{
 #' reidentify("my_study_masked_2026-10-23_14-53.csv",
 #'            key_file = "my_study_KEY_2026-10-23_14-53.txt")
+#' reidentify(c("study1_masked_2026-11-01_14-30.csv",
+#'              "study2_masked_2026-11-01_14-30.sav"),
+#'            key_file = "batch_KEY_2026-11-01_14-30.txt")
 #' }
 #' @export
 reidentify <- function(file, key_file, output = NULL, overwrite = FALSE,
                        header_rows = NULL) {
   key <- read_key_file(key_file)
+  files <- unlist(lapply(file, function(f) {
+    if (!dir.exists(f)) return(f)
+    found <- list.files(f, pattern = "_masked_.*\\.(csv|sav|dta|xlsx)$", ignore.case = TRUE, full.names = TRUE)
+    if (!length(found)) stop("No masked files in the folder: ", f, call. = FALSE)
+    found
+  }))
+  if (length(files) == 1) return(reidentify_one(files, key, output, overwrite, header_rows))
+  if (!is.null(output)) stop("`output` can only be used with one file.", call. = FALSE)
+  res <- list()
+  for (f in files) {
+    cat("\n", basename(f), ":\n", sep = "")
+    res[[f]] <- reidentify_one(f, key, NULL, overwrite, header_rows)
+  }
+  invisible(list(data = lapply(res, `[[`, "data"),
+                 output = vapply(res, `[[`, character(1), "output")))
+}
+
+reidentify_one <- function(file, key, output, overwrite, header_rows) {
   x <- read_survey(file, header_rows)
   data <- x$data
 
@@ -38,7 +62,8 @@ reidentify <- function(file, key_file, output = NULL, overwrite = FALSE,
     stop("The output must be a different file from the masked one.")
   }
 
-  cache <- new.env(parent = emptyenv())
+  token_re <- "(?<![A-Za-z0-9_-])MSK(?:[A-Z]{2}(?:-[A-Z0-9]{1,3})?_)?[A-Za-z0-9]{10,}(?![A-Za-z0-9_-])"
+  decoded <- character()   # token -> original value (NA: not made with this key)
   restored <- 0
   unknown <- 0
   changed <- character()
@@ -50,30 +75,25 @@ reidentify <- function(file, key_file, output = NULL, overwrite = FALSE,
     new <- v
     new[has_code & v == "MSKblank"] <- ""
     todo <- has_code & v != "MSKblank"
-    m <- gregexpr("(?<![A-Za-z0-9])MSK[A-Za-z0-9]{10,}(?![A-Za-z0-9])", new[todo], perl = TRUE)
-    regmatches(new[todo], m) <- lapply(regmatches(new[todo], m), function(tokens) {
-      vapply(tokens, function(tok) {
-        val <- cache[[tok]]
-        if (is.null(val)) {
-          val <- decode_token(tok, key)
-          assign(tok, val, envir = cache)
-        }
-        if (is.na(val)) {
-          unknown <<- unknown + 1
-          tok
-        } else {
-          restored <<- restored + 1
-          val
-        }
-      }, character(1), USE.NAMES = FALSE)
-    })
+    m <- gregexpr(token_re, new[todo], perl = TRUE)
+    found <- regmatches(new[todo], m)
+    tokens <- unlist(found)
+    fresh <- setdiff(unique(tokens), names(decoded))
+    if (length(fresh)) decoded <- c(decoded, stats::setNames(decode_tokens(fresh, key), fresh))
+    vals <- unname(decoded[tokens])
+    restored <- restored + sum(!is.na(vals))
+    unknown <- unknown + sum(is.na(vals))
+    vals[is.na(vals)] <- tokens[is.na(vals)]
+    regmatches(new[todo], m) <- unname(split(vals, factor(rep(seq_along(found), lengths(found)),
+                                                          levels = seq_along(found))))
     if (!identical(new, v)) {
       data[[col]] <- replace_column(v, new)
       changed <- c(changed, col)
     }
   }
   if (restored == 0 && unknown > 0) {
-    stop("None of the codes match this key. Is it the key file used to mask this file?", call. = FALSE)
+    stop("None of the codes in ", basename(file), " match this key (created ", key$created,
+         "). The report of the masked file says when its key was created.", call. = FALSE)
   }
 
   x$data <- data
@@ -86,19 +106,28 @@ reidentify <- function(file, key_file, output = NULL, overwrite = FALSE,
   invisible(list(data = data, output = out_path))
 }
 
-# A token is "MSK" + optional region (e.g. "IT" or "USCT") + code. The region
-# length is unknown, so each possibility is tried; only the right one passes
+# A token is "MSK" + optional region and "_" (e.g. "MSKIT_", "MSKUS-CT_") +
+# code. Codes from before 0.3.0 had the region with no "_" ("MSKUSCT..."): for
+# those each possible region length is tried, and only the right one passes
 # the key check.
-decode_token <- function(token, key) {
-  rest <- substring(token, 4)
+decode_token <- function(token, key) decode_tokens(token, key)
+
+decode_tokens <- function(tokens, key) {
+  out <- rep(NA_character_, length(tokens))
+  sep <- grepl("_", tokens, fixed = TRUE)
+  if (any(sep)) out[sep] <- decrypt_codes(sub("^MSK[^_]*_", "", tokens[sep]), key)
+  rest <- substring(tokens, 4)
   for (n in c(0, 2, 4)) {
-    if (n && !grepl(sprintf("^[A-Z]{%d}", n), rest)) next
-    val <- decrypt_code(substring(rest, n + 1), key)
-    if (!is.na(val)) {
-      if (startsWith(val, lat_tag)) return(sub(",.*$", "", substring(val, 3)))
-      if (startsWith(val, lon_tag)) return(sub("^[^,]*,", "", substring(val, 3)))
-      return(val)
-    }
+    try <- which(!sep & is.na(out) & (n == 0 | grepl(sprintf("^[A-Z]{%d}", n), rest)))
+    if (length(try)) out[try] <- decrypt_codes(substring(rest[try], n + 1), key)
   }
-  NA_character_
+  vapply(out, decode_value, character(1), USE.NAMES = FALSE)
+}
+
+# Latitude and longitude codes hold the whole pair: keep the right half.
+decode_value <- function(val) {
+  if (is.na(val)) return(val)
+  if (startsWith(val, lat_tag)) return(sub(",.*$", "", substring(val, 3)))
+  if (startsWith(val, lon_tag)) return(sub("^[^,]*,", "", substring(val, 3)))
+  val
 }
