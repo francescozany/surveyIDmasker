@@ -1,6 +1,7 @@
 # surveyIDmasker
 
 [![DOI](https://zenodo.org/badge/DOI/10.5281/zenodo.23599338.svg)](https://doi.org/10.5281/zenodo.23599338)
+[![R-CMD-check](https://github.com/francescozany/surveyIDmasker/actions/workflows/R-CMD-check.yaml/badge.svg)](https://github.com/francescozany/surveyIDmasker/actions/workflows/R-CMD-check.yaml)
 
 Mask participant identifiers in survey exports before sharing them.
 
