@@ -23,3 +23,8 @@ IDs, emails, IP addresses or phone numbers, and for any of the \code{known_ids} 
 values of the columns being masked). Participants sometimes type their ID
 into open-ended answers.
 }
+\examples{
+example <- system.file("extdata", "example_survey.csv", package = "surveyIDmasker")
+data <- read_survey(example)$data
+scan_text(data, "comment")
+}

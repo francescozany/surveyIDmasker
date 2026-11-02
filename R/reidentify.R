@@ -16,20 +16,25 @@
 #' @param overwrite Replace an existing output file.
 #' @param header_rows Number of header rows in CSV/Excel files (detected
 #'   automatically).
+#' @param quiet Do not print what was done.
 #' @return Invisibly, a list with the re-identified `data` and the `output`
 #'   path. With several files, `data` is a list and `output` a vector, both
 #'   named by file.
 #' @examples
-#' \dontrun{
-#' reidentify("my_study_masked_2026-10-23_14-53.csv",
-#'            key_file = "my_study_KEY_2026-10-23_14-53.txt")
-#' reidentify(c("study1_masked_2026-11-01_14-30.csv",
-#'              "study2_masked_2026-11-01_14-30.sav"),
-#'            key_file = "batch_KEY_2026-11-01_14-30.txt")
-#' }
+#' # A small made-up Qualtrics export that comes with the package,
+#' # copied to a temporary folder
+#' dir <- tempfile("survey")
+#' dir.create(dir)
+#' file.copy(system.file("extdata", "example_survey.csv", package = "surveyIDmasker"), dir)
+#' study <- file.path(dir, "example_survey.csv")
+#' res <- mask_survey(study, columns = "suggested", ip = "full", latlon = "full")
+#'
+#' # With the key, the codes become the original identifiers again
+#' back <- reidentify(res$output, key_file = res$key_file)
+#' back$data$PROLIFIC_PID
 #' @export
 reidentify <- function(file, key_file, output = NULL, overwrite = FALSE,
-                       header_rows = NULL) {
+                       header_rows = NULL, quiet = FALSE) {
   key <- read_key_file(key_file)
   files <- unlist(lapply(file, function(f) {
     if (!dir.exists(f)) return(f)
@@ -37,18 +42,18 @@ reidentify <- function(file, key_file, output = NULL, overwrite = FALSE,
     if (!length(found)) stop("No masked files in the folder: ", f, call. = FALSE)
     found
   }))
-  if (length(files) == 1) return(reidentify_one(files, key, output, overwrite, header_rows))
+  if (length(files) == 1) return(reidentify_one(files, key, output, overwrite, header_rows, quiet))
   if (!is.null(output)) stop("`output` can only be used with one file.", call. = FALSE)
   res <- list()
   for (f in files) {
-    cat("\n", basename(f), ":\n", sep = "")
-    res[[f]] <- reidentify_one(f, key, NULL, overwrite, header_rows)
+    if (!quiet) cat("\n", basename(f), ":\n", sep = "")
+    res[[f]] <- reidentify_one(f, key, NULL, overwrite, header_rows, quiet)
   }
   invisible(list(data = lapply(res, `[[`, "data"),
                  output = vapply(res, `[[`, character(1), "output")))
 }
 
-reidentify_one <- function(file, key, output, overwrite, header_rows) {
+reidentify_one <- function(file, key, output, overwrite, header_rows, quiet = FALSE) {
   x <- read_survey(file, header_rows)
   data <- x$data
 
@@ -98,11 +103,13 @@ reidentify_one <- function(file, key, output, overwrite, header_rows) {
 
   x$data <- data
   write_survey(x, out_path)
-  cat(sprintf("Restored %d value(s) in %d column(s): %s\n", restored, length(changed),
+  if (!quiet) cat(sprintf("Restored %d value(s) in %d column(s): %s\n", restored, length(changed),
               paste(changed, collapse = ", ")))
-  if (unknown) message("Note: ", unknown, " code(s) were not made with this key and were left unchanged.")
-  cat("Re-identified file: ", out_path, "\n", sep = "")
-  message("This file contains identifiers again: keep it private.")
+  if (unknown && !quiet) message("Note: ", unknown, " code(s) were not made with this key and were left unchanged.")
+  if (!quiet) {
+    cat("Re-identified file: ", out_path, "\n", sep = "")
+    message("This file contains identifiers again: keep it private.")
+  }
   invisible(list(data = data, output = out_path))
 }
 

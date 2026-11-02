@@ -59,6 +59,9 @@ normalize_name <- function(x) gsub("[^\\p{L}\\p{N}]", "", tolower(x), perl = TRU
 #'   that are empty, e.g. `IPAddress` in an anonymized export.
 #' @return A data frame with the suggested `column` names, the `reason`, and
 #'   whether the column is `empty`.
+#' @examples
+#' example <- system.file("extdata", "example_survey.csv", package = "surveyIDmasker")
+#' suggest_id_columns(read_survey(example)$data)
 #' @export
 suggest_id_columns <- function(data, include_empty = FALSE) {
   reasons <- vapply(names(data), function(col) {

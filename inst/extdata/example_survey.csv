@@ -1,0 +1,8 @@
+StartDate,EndDate,IPAddress,LocationLatitude,LocationLongitude,PROLIFIC_PID,age,rating,comment
+Start Date,End Date,IP Address,Location Latitude,Location Longitude,PROLIFIC_PID,What is your age?,How much did you like the product?,Any comments?
+"{""ImportId"":""startDate""}","{""ImportId"":""endDate""}","{""ImportId"":""ipAddress""}","{""ImportId"":""locationLatitude""}","{""ImportId"":""locationLongitude""}","{""ImportId"":""PROLIFIC_PID""}","{""ImportId"":""QID1_TEXT""}","{""ImportId"":""QID2""}","{""ImportId"":""QID3_TEXT""}"
+2026-01-05 10:02:11,2026-01-05 10:09:40,192.0.2.10,41.3083,-72.9279,0a1b2c3d4e5f60718293a4b5,34,6,
+2026-01-05 10:15:03,2026-01-05 10:21:55,198.51.100.7,41.9028,12.4964,1f2e3d4c5b6a79880716a5b4,27,4,my id is 1f2e3d4c5b6a79880716a5b4
+2026-01-05 11:40:29,2026-01-05 11:48:02,203.0.113.25,40.7128,-74.0060,2c3b4a5d6e7f80910a1b2c3d,45,7,nice study
+2026-01-06 09:12:45,2026-01-06 09:20:31,192.0.2.10,41.3083,-72.9279,0a1b2c3d4e5f60718293a4b5,34,5,second time here
+2026-01-06 14:05:17,2026-01-06 14:12:09,198.51.100.42,,,3d4c5b6a7f8e90a1b2c3d4e5,52,3,

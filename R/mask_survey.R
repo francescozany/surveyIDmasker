@@ -66,30 +66,40 @@
 #' @param overwrite Replace existing output files.
 #' @param header_rows Number of header rows in CSV/Excel files (detected
 #'   automatically).
+#' @param quiet Do not print what was done (questions in the guided mode are
+#'   still asked).
 #' @return Invisibly, a list with the masked `data` and the paths of the
 #'   `output`, the `report` and the `key_file`. With several files, `data` is
 #'   a list and `output` a vector, both named by file.
 #' @examples
-#' \dontrun{
-#' mask_survey()   # guided
-#' mask_survey("my_study.sav", columns = c(4, 14, 15, 36),
-#'                ip = "full", latlon = "country_state")
-#' mask_survey("my_study.csv", columns = "suggested", ip = "country_state",
-#'                latlon = "country_state", ip_db = "dbip-city-lite.csv")
-#' # several files, one key, one report
-#' mask_survey(c("study1.csv", "study2.sav"), columns = "suggested")
-#' mask_survey("my_project_folder", columns = "suggested")
-#' }
+#' # A small made-up Qualtrics export that comes with the package,
+#' # copied to a temporary folder
+#' dir <- tempfile("survey")
+#' dir.create(dir)
+#' file.copy(system.file("extdata", "example_survey.csv", package = "surveyIDmasker"), dir)
+#' study <- file.path(dir, "example_survey.csv")
+#'
+#' res <- mask_survey(study, columns = "suggested", ip = "full",
+#'                    latlon = "country_state")
+#' read_survey(res$output)$data[, c("IPAddress", "LocationLatitude", "PROLIFIC_PID")]
+#'
+#' # Guided: choose the file(s) and answer a few questions
+#' if (interactive()) mask_survey()
+#'
+#' # Several files with one key and one report, e.g.
+#' # mask_survey(c("study1.csv", "study2.sav"), columns = "suggested")
 #' @export
 mask_survey <- function(file = NULL, columns = NULL, ip = NULL, latlon = NULL,
                            ip_db = NULL, key_file = NULL,
                            scan_text = TRUE, mask_text = FALSE,
                            output = NULL, overwrite = FALSE,
-                           header_rows = NULL) {
+                           header_rows = NULL, quiet = FALSE) {
   ask <- interactive()
+  say <- function(...) if (!quiet) cat(...)
+  tell <- function(...) if (!quiet) message(...)
   if (ask && (is.null(file) || is.null(columns))) {
-    if (is.null(file)) cat("You can mask one file, or several files using the same key (select them together).\n")
-    cat("Type q at any question (or press Esc) to exit. Nothing is saved until the end.\n\n")
+    if (is.null(file)) say("You can mask one file, or several files using the same key (select them together).\n")
+    say("Type q at any question (or press Esc) to exit. Nothing is saved until the end.\n\n")
   }
 
   # 1. The files
@@ -100,7 +110,7 @@ mask_survey <- function(file = NULL, columns = NULL, ip = NULL, latlon = NULL,
     files <- expand_files(file)
     files <- lapply(stats::setNames(files, files), function(f) {
       x <- read_survey(f, header_rows)
-      cat(sprintf("Read %s: %d rows, %d columns.\n", basename(f), nrow(x$data), ncol(x$data)))
+      say(sprintf("Read %s: %d rows, %d columns.\n", basename(f), nrow(x$data), ncol(x$data)))
       x
     })
   }
@@ -112,7 +122,7 @@ mask_survey <- function(file = NULL, columns = NULL, ip = NULL, latlon = NULL,
     stop("Column numbers differ from file to file: with several files, give column names, ",
          "\"suggested\", or a list named by file.", call. = FALSE)
   }
-  if (batch) cat(sprintf("\n%d files will be masked using the same key.\n", n))
+  if (batch) say(sprintf("\n%d files will be masked using the same key.\n", n))
 
   # 2. The columns of each file
   skipped <- character()
@@ -120,7 +130,7 @@ mask_survey <- function(file = NULL, columns = NULL, ip = NULL, latlon = NULL,
   for (i in seq_len(n)) {
     data <- files[[i]]$data
     if (batch && is.null(columns) && ask) {
-      cat("\n", rule(sprintf("File %d of %d: %s", i, n, basename(paths[i]))), "\n", sep = "")
+      say("\n", rule(sprintf("File %d of %d: %s", i, n, basename(paths[i]))), "\n", sep = "")
     }
     sel <- if (is.null(columns)) {
       choose_columns(data, ask, batch)
@@ -149,7 +159,7 @@ mask_survey <- function(file = NULL, columns = NULL, ip = NULL, latlon = NULL,
     if (ask && batch) {
       title <- if (length(undecided) == length(paths)) sprintf("For all %d files", length(paths)) else
         paste("IP addresses and locations:", paste(basename(undecided), collapse = ", "))
-      cat("\n", rule(title), "\n", sep = "")
+      say("\n", rule(title), "\n", sep = "")
     }
     if (anyNA(latlon_of)) latlon_of[is.na(latlon_of)] <- choose_mode(NULL, "latitude/longitude", ask)
     if (anyNA(ip_of)) ip_of[is.na(ip_of)] <- choose_mode(NULL, "IP addresses", ask)
@@ -201,7 +211,7 @@ mask_survey <- function(file = NULL, columns = NULL, ip = NULL, latlon = NULL,
   cb <- new_codebook(key)
   db <- NULL
   if (any(ip_of == "country_state")) {
-    cat("Reading the IP database (this can take a minute)...\n")
+    say("Reading the IP database (this can take a minute)...\n")
     db <- read_ip_db(ip_db)
   }
   # IDs from all files are looked for in the free text of every file.
@@ -211,12 +221,12 @@ mask_survey <- function(file = NULL, columns = NULL, ip = NULL, latlon = NULL,
   results <- list()
   for (i in seq_along(paths)) {
     p <- paths[i]
-    if (batch) cat(sprintf("Masking %s (%d of %d)...", basename(p), i, length(paths)))
+    if (batch) say(sprintf("Masking %s (%d of %d)...", basename(p), i, length(paths)))
     results[[p]] <- mask_one(files[[p]], cols[[p]], cb,
                              if (p %in% names(latlon_of)) latlon_of[[p]],
                              if (p %in% names(ip_of)) ip_of[[p]],
                              ip_cols[[p]], db, scan_text, mask_text, originals)
-    if (batch) cat(" done,", length(cols[[p]]), "column(s)\n")
+    if (batch) say(" done,", length(cols[[p]]), "column(s)\n")
   }
 
   # 6. Writing
@@ -234,31 +244,31 @@ mask_survey <- function(file = NULL, columns = NULL, ip = NULL, latlon = NULL,
 
   # 7. Summary
   if (batch) {
-    cat("\n")
+    say("\n")
     for (p in names(results)) {
-      for (note in results[[p]]$notes) message("Note: ", basename(p), ": ", note)
+      for (note in results[[p]]$notes) tell("Note: ", basename(p), ": ", note)
     }
-    if (length(skipped)) message("Not masked (no identifier columns): ", paste(basename(skipped), collapse = ", "))
-    cat("\nMasked files:\n", paste0("  ", basename(out_paths), "\n"), sep = "")
-    cat("Report: ", basename(report_path), "\n", sep = "")
-    cat("Key:    ", basename(key_file), if (new_key) " (new" else " (reused", ", created ", key$created, ")\n", sep = "")
-    cat("Folder: ", dirname(report_path), "\n", sep = "")
+    if (length(skipped)) tell("Not masked (no identifier columns): ", paste(basename(skipped), collapse = ", "))
+    say("\nMasked files:\n", paste0("  ", basename(out_paths), "\n"), sep = "")
+    say("Report: ", basename(report_path), "\n", sep = "")
+    say("Key:    ", basename(key_file), if (new_key) " (new" else " (reused", ", created ", key$created, ")\n", sep = "")
+    say("Folder: ", dirname(report_path), "\n", sep = "")
   } else {
     r <- results[[1]]
-    cat("\nMasked", length(cols[[1]]), "column(s):", paste(cols[[1]], collapse = ", "), "\n")
-    for (note in r$notes) message("Note: ", note)
-    if (!is.null(r$text_found) && nrow(r$text_found)) print(r$text_found, row.names = FALSE)
-    cat("Masked file: ", out_paths[[1]], "\nReport:      ", report_path, "\n", sep = "")
-    cat("Key:         ", key_file, if (new_key) " (new)" else " (reused)", "\n", sep = "")
+    say("\nMasked", length(cols[[1]]), "column(s):", paste(cols[[1]], collapse = ", "), "\n")
+    for (note in r$notes) tell("Note: ", note)
+    if (!quiet && !is.null(r$text_found) && nrow(r$text_found)) print(r$text_found, row.names = FALSE)
+    say("Masked file: ", out_paths[[1]], "\nReport:      ", report_path, "\n", sep = "")
+    say("Key:         ", key_file, if (new_key) " (new)" else " (reused)", "\n", sep = "")
   }
   if (new_key) {
-    message("\nKEEP THE KEY FILE PRIVATE. Store it with the original data and never share it.\n",
+    tell("\nKEEP THE KEY FILE PRIVATE. Store it with the original data and never share it.\n",
             "It is the only way to turn the codes back into the original identifiers.")
   }
   suggested <- vapply(paths, function(p) {
     identical(cols[[p]], suggest_id_columns(files[[p]]$data)$column)
   }, logical(1))
-  cat("\nTo repeat this masking in one line:\n",
+  say("\nTo repeat this masking in one line:\n",
       repeat_command(paths, cols, suggested, ip_of, latlon_of,
                      ip_db, key_file, mask_text), "\n", sep = "")
 
@@ -699,6 +709,9 @@ column_kind <- function(col, values) {
 #' @param file Path to a survey data file (.csv, .sav, .dta or .xlsx).
 #' @return Invisibly, a data frame with `number`, `column`, `suggested` and
 #'   `empty`.
+#' @examples
+#' example <- system.file("extdata", "example_survey.csv", package = "surveyIDmasker")
+#' list_columns(example)
 #' @export
 list_columns <- function(file) {
   data <- read_survey(file)$data

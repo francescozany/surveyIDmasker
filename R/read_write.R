@@ -24,6 +24,11 @@ detect_header_rows <- function(raw) {
 #'   automatically when `NULL`.
 #' @return A list with `data` (a data frame), `header` (extra header rows, if
 #'   any), `names` (original column names) and `format`.
+#' @examples
+#' example <- system.file("extdata", "example_survey.csv", package = "surveyIDmasker")
+#' x <- read_survey(example)
+#' x$data
+#' x$header   # the question text and ImportId rows of the Qualtrics export
 #' @export
 read_survey <- function(path, header_rows = NULL) {
   if (!file.exists(path)) stop("File not found: ", path)

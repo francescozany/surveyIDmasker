@@ -9,7 +9,8 @@ reidentify(
   key_file,
   output = NULL,
   overwrite = FALSE,
-  header_rows = NULL
+  header_rows = NULL,
+  quiet = FALSE
 )
 }
 \arguments{
@@ -26,6 +27,8 @@ paths, or a folder (all masked files in it).}
 
 \item{header_rows}{Number of header rows in CSV/Excel files (detected
 automatically).}
+
+\item{quiet}{Do not print what was done.}
 }
 \value{
 Invisibly, a list with the re-identified \code{data} and the \code{output}
@@ -41,11 +44,15 @@ left as they are. The masked file is not changed; the result is written to
 same key can be given at once.
 }
 \examples{
-\dontrun{
-reidentify("my_study_masked_2026-10-23_14-53.csv",
-           key_file = "my_study_KEY_2026-10-23_14-53.txt")
-reidentify(c("study1_masked_2026-11-01_14-30.csv",
-             "study2_masked_2026-11-01_14-30.sav"),
-           key_file = "batch_KEY_2026-11-01_14-30.txt")
-}
+# A small made-up Qualtrics export that comes with the package,
+# copied to a temporary folder
+dir <- tempfile("survey")
+dir.create(dir)
+file.copy(system.file("extdata", "example_survey.csv", package = "surveyIDmasker"), dir)
+study <- file.path(dir, "example_survey.csv")
+res <- mask_survey(study, columns = "suggested", ip = "full", latlon = "full")
+
+# With the key, the codes become the original identifiers again
+back <- reidentify(res$output, key_file = res$key_file)
+back$data$PROLIFIC_PID
 }

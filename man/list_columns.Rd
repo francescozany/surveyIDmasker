@@ -18,3 +18,7 @@ Use the numbers in \code{mask_survey(columns = ...)}. Suggested identifier
 columns are marked with \code{*}; identifier columns with no data also show
 \code{(empty)}.
 }
+\examples{
+example <- system.file("extdata", "example_survey.csv", package = "surveyIDmasker")
+list_columns(example)
+}

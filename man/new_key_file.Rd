@@ -20,3 +20,7 @@ this file can turn masked codes back into the original identifiers, so keep
 it private and never share it with the data. \code{\link[=mask_survey]{mask_survey()}} creates one
 automatically; use this only to prepare a key in advance.
 }
+\examples{
+key <- new_key_file(tempfile(fileext = ".txt"))
+mask_values(c("A1B2C3D4E5F6G7", "B2C3D4E5F6G7H8"), key_file = key)
+}

@@ -22,3 +22,9 @@ Credamo export, or lab data), keeping any extra header rows (in Qualtrics,
 question text and ImportId) so the file can be written back unchanged apart
 from the masked columns.
 }
+\examples{
+example <- system.file("extdata", "example_survey.csv", package = "surveyIDmasker")
+x <- read_survey(example)
+x$data
+x$header   # the question text and ImportId rows of the Qualtrics export
+}

@@ -24,3 +24,7 @@ the columns (values that look like Prolific IDs, MTurk IDs, emails or IP
 addresses). Empty columns have nothing to mask, so they are left out unless
 \code{include_empty = TRUE}.
 }
+\examples{
+example <- system.file("extdata", "example_survey.csv", package = "surveyIDmasker")
+suggest_id_columns(read_survey(example)$data)
+}

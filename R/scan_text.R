@@ -22,6 +22,10 @@ text_patterns <- c(
 #' @param known_ids Exact identifiers to look for.
 #' @return A data frame with `column`, `type` and `cells` (number of cells
 #'   with a match). No matched values are returned.
+#' @examples
+#' example <- system.file("extdata", "example_survey.csv", package = "surveyIDmasker")
+#' data <- read_survey(example)$data
+#' scan_text(data, "comment")
 #' @export
 scan_text <- function(data, columns = names(data), known_ids = character()) {
   known_ids <- usable_ids(known_ids)

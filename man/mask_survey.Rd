@@ -15,7 +15,8 @@ mask_survey(
   mask_text = FALSE,
   output = NULL,
   overwrite = FALSE,
-  header_rows = NULL
+  header_rows = NULL,
+  quiet = FALSE
 )
 }
 \arguments{
@@ -62,6 +63,9 @@ their codes.}
 
 \item{header_rows}{Number of header rows in CSV/Excel files (detected
 automatically).}
+
+\item{quiet}{Do not print what was done (questions in the guided mode are
+still asked).}
 }
 \value{
 Invisibly, a list with the masked \code{data} and the paths of the
@@ -104,14 +108,20 @@ file also keeps a list of every file masked with it.
 \verb{<date>_<time>} is when the run started, e.g. \verb{2026-10-23_14-53}.
 }
 \examples{
-\dontrun{
-mask_survey()   # guided
-mask_survey("my_study.sav", columns = c(4, 14, 15, 36),
-               ip = "full", latlon = "country_state")
-mask_survey("my_study.csv", columns = "suggested", ip = "country_state",
-               latlon = "country_state", ip_db = "dbip-city-lite.csv")
-# several files, one key, one report
-mask_survey(c("study1.csv", "study2.sav"), columns = "suggested")
-mask_survey("my_project_folder", columns = "suggested")
-}
+# A small made-up Qualtrics export that comes with the package,
+# copied to a temporary folder
+dir <- tempfile("survey")
+dir.create(dir)
+file.copy(system.file("extdata", "example_survey.csv", package = "surveyIDmasker"), dir)
+study <- file.path(dir, "example_survey.csv")
+
+res <- mask_survey(study, columns = "suggested", ip = "full",
+                   latlon = "country_state")
+read_survey(res$output)$data[, c("IPAddress", "LocationLatitude", "PROLIFIC_PID")]
+
+# Guided: choose the file(s) and answer a few questions
+if (interactive()) mask_survey()
+
+# Several files with one key and one report, e.g.
+# mask_survey(c("study1.csv", "study2.sav"), columns = "suggested")
 }

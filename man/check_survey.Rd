@@ -4,7 +4,7 @@
 \alias{check_survey}
 \title{Check a file for identifiers before sharing it}
 \usage{
-check_survey(file, header_rows = NULL)
+check_survey(file, header_rows = NULL, quiet = FALSE)
 }
 \arguments{
 \item{file}{Path to a survey data file (.csv, .sav, .dta or .xlsx), a
@@ -12,6 +12,8 @@ vector of such paths, or a folder.}
 
 \item{header_rows}{Number of header rows in CSV/Excel files (detected
 automatically).}
+
+\item{quiet}{Do not print the findings (they are still returned).}
 }
 \value{
 Invisibly, a data frame with one row per finding: \code{file},
@@ -24,7 +26,15 @@ identifiers typed into other columns. No key is needed and the file is not
 changed.
 }
 \examples{
-\dontrun{
-check_survey("my_study_masked_2026-11-01_14-30.csv")
-}
+# A small made-up Qualtrics export that comes with the package,
+# copied to a temporary folder
+dir <- tempfile("survey")
+dir.create(dir)
+file.copy(system.file("extdata", "example_survey.csv", package = "surveyIDmasker"), dir)
+study <- file.path(dir, "example_survey.csv")
+check_survey(study)   # before masking: the identifiers are listed
+
+res <- mask_survey(study, columns = "suggested", ip = "full", latlon = "full",
+                   mask_text = TRUE)
+check_survey(res$output)   # after masking
 }

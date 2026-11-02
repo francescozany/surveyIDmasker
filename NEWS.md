@@ -1,3 +1,12 @@
+# surveyIDmasker 0.3.1
+
+* First version submitted to CRAN.
+* `mask_survey()`, `reidentify()` and `check_survey()` gain `quiet = TRUE` to
+  print nothing.
+* Every help page has an example that runs, using a small made-up survey that
+  comes with the package (`system.file("extdata", "example_survey.csv",
+  package = "surveyIDmasker")`).
+
 # surveyIDmasker 0.3.0
 
 * Several files can be masked in one run using the same key. In the guided

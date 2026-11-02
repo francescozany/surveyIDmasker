@@ -9,14 +9,24 @@
 #'   vector of such paths, or a folder.
 #' @param header_rows Number of header rows in CSV/Excel files (detected
 #'   automatically).
+#' @param quiet Do not print the findings (they are still returned).
 #' @return Invisibly, a data frame with one row per finding: `file`,
 #'   `column`, `issue` and `cells`.
 #' @examples
-#' \dontrun{
-#' check_survey("my_study_masked_2026-11-01_14-30.csv")
-#' }
+#' # A small made-up Qualtrics export that comes with the package,
+#' # copied to a temporary folder
+#' dir <- tempfile("survey")
+#' dir.create(dir)
+#' file.copy(system.file("extdata", "example_survey.csv", package = "surveyIDmasker"), dir)
+#' study <- file.path(dir, "example_survey.csv")
+#' check_survey(study)   # before masking: the identifiers are listed
+#'
+#' res <- mask_survey(study, columns = "suggested", ip = "full", latlon = "full",
+#'                    mask_text = TRUE)
+#' check_survey(res$output)   # after masking
 #' @export
-check_survey <- function(file, header_rows = NULL) {
+check_survey <- function(file, header_rows = NULL, quiet = FALSE) {
+  say <- function(...) if (!quiet) cat(...)
   found <- list()
   for (f in expand_files(file)) {
     data <- read_survey(f, header_rows)$data
@@ -30,13 +40,13 @@ check_survey <- function(file, header_rows = NULL) {
       data.frame(column = text$column, issue = paste0(text$type, rep(" in text", nrow(text))),
                  cells = text$cells)
     )
-    cat(sprintf("%s: %d rows, %d columns\n", basename(f), nrow(data), ncol(data)))
-    if (length(masked)) cat("  Masked columns:", paste(masked, collapse = ", "), "\n")
+    say(sprintf("%s: %d rows, %d columns\n", basename(f), nrow(data), ncol(data)))
+    if (length(masked)) say("  Masked columns:", paste(masked, collapse = ", "), "\n")
     if (nrow(rows)) {
-      cat("  Still looks identifying:\n")
-      cat(sprintf("    %-28s %-36s %d cell(s)\n", rows$column, rows$issue, rows$cells), sep = "")
+      say("  Still looks identifying:\n")
+      say(sprintf("    %-28s %-36s %d cell(s)\n", rows$column, rows$issue, rows$cells), sep = "")
     } else {
-      cat("  Nothing else that looks identifying was found.\n")
+      say("  Nothing else that looks identifying was found.\n")
     }
     if (nrow(rows)) found[[f]] <- cbind(file = basename(f), rows)
   }

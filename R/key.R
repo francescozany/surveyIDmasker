@@ -19,6 +19,9 @@ derive_key <- function(secret) {
 #' @param path Where to save the key file.
 #' @param overwrite Replace an existing file.
 #' @return Invisibly, the path.
+#' @examples
+#' key <- new_key_file(tempfile(fileext = ".txt"))
+#' mask_values(c("A1B2C3D4E5F6G7", "B2C3D4E5F6G7H8"), key_file = key)
 #' @export
 new_key_file <- function(path, overwrite = FALSE) {
   if (file.exists(path) && !overwrite) stop("Key file already exists: ", path)
