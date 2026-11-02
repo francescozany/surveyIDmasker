@@ -1,3 +1,10 @@
+## Resubmission
+
+This is a resubmission. In this version I have:
+
+* Replaced the relative link to CODES.md in README.md (a file not included
+  in the package) with its full URL on GitHub.
+
 ## Submission
 
 This is the first submission of surveyIDmasker to CRAN.

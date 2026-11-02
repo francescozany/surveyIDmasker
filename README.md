@@ -141,7 +141,7 @@ After every run, the console prints the one-line command that repeats it.
 - **Before sharing**, `check_survey("my_study_masked_....csv")` lists anything
   that still looks identifying.
 - Your survey responses never leave your computer. How the codes are made is
-  explained in [CODES.md](CODES.md).
+  explained in [CODES.md](https://github.com/francescozany/surveyIDmasker/blob/main/CODES.md).
 
 ## Cite
 
