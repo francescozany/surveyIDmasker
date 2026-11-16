@@ -16,6 +16,7 @@ mask_survey(
   output = NULL,
   overwrite = FALSE,
   header_rows = NULL,
+  timestamp = FALSE,
   quiet = FALSE
 )
 }
@@ -54,7 +55,8 @@ created.}
 the files being masked).}
 
 \item{mask_text}{Also replace identifiers found in other columns with
-their codes.}
+their codes. In the guided mode, what was found is shown before saving
+and you are asked.}
 
 \item{output}{Path of the masked file (one file only). Defaults to
 \verb{<name>_masked_<date>_<time>.<ext>}.}
@@ -64,12 +66,20 @@ their codes.}
 \item{header_rows}{Number of header rows in CSV/Excel files (detected
 automatically).}
 
+\item{timestamp}{Get an independent timestamp of the report from a public
+timestamping service (needs an internet connection). Only the SHA-256
+fingerprint of the report is sent. The timestamp is added at the end of
+the report and shows that the report, and the masked files whose
+fingerprints it lists, have not changed since; check it with
+\code{\link[=verify_report]{verify_report()}}. In the guided mode you are asked.}
+
 \item{quiet}{Do not print what was done (questions in the guided mode are
 still asked).}
 }
 \value{
 Invisibly, a list with the masked \code{data} and the paths of the
-\code{output}, the \code{report} and the \code{key_file}. With several files, \code{data} is
+\code{output}, the \code{report} and the \code{key_file}, and \code{timestamped} (\code{TRUE} when
+the report was timestamped). With several files, \code{data} is
 a list and \code{output} a vector, both named by file.
 }
 \description{
@@ -82,7 +92,8 @@ restores the original identifiers.
 }
 \details{
 Several files can be masked at once using the same key: give a vector of
-files or a folder, or, in the guided mode, add more files after the first.
+files or a folder, or, in the guided mode, select them together in the file
+window.
 The same identifier then gets the same code in every file.
 
 Run it with no arguments to be guided step by step. Anything you give as an
@@ -96,7 +107,8 @@ The original files are never changed. Files written:
 \item \verb{<name>_masked_<date>_<time>.<ext>}, next to each original: the data to
 share;
 \item the report: what was masked, when, with which key (identified only by the
-time it was created), and a SHA-256 checksum of each masked file. For one
+time it was created), a SHA-256 checksum of each masked file and, with
+\code{timestamp = TRUE}, the timestamp at its end. For one
 file it is \verb{<name>_masked_<date>_<time>_report.txt}; for several, one
 \verb{batch_masked_<date>_<time>_report.txt} in the folder of the first file;
 \item the private key, only when no \code{key_file} is given:

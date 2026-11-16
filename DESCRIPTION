@@ -1,6 +1,6 @@
 Package: surveyIDmasker
 Title: Mask Participant Identifiers in Survey Exports
-Version: 0.3.1
+Version: 0.3.1.9000
 Authors@R:
     person("Francesco", "Zanibellato", email = "fz150@georgetown.edu",
            role = c("aut", "cre", "cph"))
@@ -24,6 +24,7 @@ Language: en-US
 Roxygen: list(markdown = TRUE)
 Imports:
     countrycode,
+    curl,
     digest,
     haven,
     maps,

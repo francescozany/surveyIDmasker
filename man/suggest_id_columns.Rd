@@ -22,7 +22,7 @@ Looks at column names (e.g. \code{workerId}, \code{PROLIFIC_PID}, \code{particip
 ID, longitude, latitude, province and city columns) and at the content of
 the columns (values that look like Prolific IDs, MTurk IDs, emails or IP
 addresses). Empty columns have nothing to mask, so they are left out unless
-\code{include_empty = TRUE}.
+\code{include_empty = TRUE}. Columns already masked (all codes) are left out.
 }
 \examples{
 example <- system.file("extdata", "example_survey.csv", package = "surveyIDmasker")

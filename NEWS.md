@@ -1,3 +1,37 @@
+# surveyIDmasker (development version)
+
+* `mask_survey(timestamp = TRUE)` gets an independent timestamp of the report
+  from a public timestamping service (RFC 3161; Sectigo, or DigiCert if
+  Sectigo does not answer). Only the report's SHA-256 fingerprint is sent.
+  The timestamp is added at the end of the report, so there is no extra file
+  to share. If no service answers, everything else is saved and the report
+  says no timestamp was obtained.
+* New `verify_report()` checks that masked files still match their report,
+  that a timestamped report has not changed since it was timestamped, and
+  lists the masked columns of each file. It works offline.
+* In the guided mode, identifiers found inside other columns (e.g. a worker
+  ID typed into a comment) are now shown before anything is saved, and you
+  are asked whether to replace them with their codes. Before, they were only
+  mentioned after the files were saved. One-line calls are unchanged: they
+  are replaced only with `mask_text = TRUE`.
+* Identifiers found inside other columns are now listed with the rows they
+  are in (numbered as in the file, below its header rows), on screen and in
+  the report. `scan_text()` returns them in a new `rows` column.
+* `verify_report()` recognizes a report by its content, so a renamed copy
+  (e.g. `..._report copy.txt`) works too. A masked file that was only renamed
+  is recognized by its content as well, and shown as "yes, only the file name
+  changed" (new columns `listed_as` and `renamed`).
+* Columns that are already masked are no longer suggested, so masking a
+  masked file again stops with "This file is already masked" instead of
+  masking the codes a second time.
+* The end of a random ID used as a file name (e.g.
+  `1ABC23D4-56E7-8F90-A123-A4BC56789012.jpg`) is no longer taken for an MTurk
+  worker ID.
+* `reidentify()` restores codes that were put next to a dash inside text.
+* The help page of `mask_survey()` no longer says the guided mode adds more
+  files after the first: several files are selected together in the file
+  window.
+
 # surveyIDmasker 0.3.1
 
 * First version submitted to CRAN.

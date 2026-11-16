@@ -5,3 +5,4 @@
 ^CODES\.md$
 ^\.github$
 ^cran-comments\.md$
+^\.gitattributes$

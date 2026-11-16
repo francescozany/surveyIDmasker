@@ -52,7 +52,7 @@ normalize_name <- function(x) gsub("[^\\p{L}\\p{N}]", "", tolower(x), perl = TRU
 #' ID, longitude, latitude, province and city columns) and at the content of
 #' the columns (values that look like Prolific IDs, MTurk IDs, emails or IP
 #' addresses). Empty columns have nothing to mask, so they are left out unless
-#' `include_empty = TRUE`.
+#' `include_empty = TRUE`. Columns already masked (all codes) are left out.
 #'
 #' @param data A data frame.
 #' @param include_empty Also return identifier columns (recognized by name)
@@ -67,6 +67,7 @@ suggest_id_columns <- function(data, include_empty = FALSE) {
   reasons <- vapply(names(data), function(col) {
     x <- as.character(data[[col]])
     x <- x[!is_blank(x)]
+    if (length(x) && is_masked_column(x)) return(NA_character_)
     by_name <- id_column_names[normalize_name(col)]
     if (!length(x)) return(if (include_empty) unname(by_name) else NA_character_)
     if (!is.na(by_name)) return(unname(by_name))

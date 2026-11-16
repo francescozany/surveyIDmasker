@@ -140,6 +140,14 @@ After every run, the console prints the one-line command that repeats it.
   or save each sheet as its own file.
 - **Before sharing**, `check_survey("my_study_masked_....csv")` lists anything
   that still looks identifying.
+- **Timestamped reports**: add `timestamp = TRUE` to get the report
+  timestamped by an independent public service (Sectigo, or DigiCert if
+  Sectigo does not answer). Only the report's SHA-256 fingerprint is sent,
+  never any data. The timestamp is added at the end of the report, so you
+  share only the masked file and the report. Anyone can then run
+  `verify_report("my_study_masked_....csv")` to check that the masked file and
+  the report have not changed since that date. Do not edit or re-save the
+  report afterwards.
 - Your survey responses never leave your computer. How the codes are made is
   explained in [CODES.md](https://github.com/francescozany/surveyIDmasker/blob/main/CODES.md).
 

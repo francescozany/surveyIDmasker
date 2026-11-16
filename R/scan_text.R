@@ -1,7 +1,9 @@
 # Patterns for identifiers typed inside free text.
 text_patterns <- c(
   "Prolific ID" = "\\b[0-9a-f]{24}\\b",
-  "MTurk worker ID" = "\\bA(?=[0-9A-Z]*[0-9])[0-9A-Z]{11,20}\\b",
+  # Not the last part of a random ID such as a file name
+  # 1ABC23D4-56E7-8F90-A123-A4BC56789012.jpg, which can look the same.
+  "MTurk worker ID" = "(?<![0-9A-Fa-f]{8}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{4}-)\\bA(?=[0-9A-Z]*[0-9])[0-9A-Z]{11,20}\\b",
   "email" = "[[:alnum:]._%+-]+@[[:alnum:].-]+\\.[[:alpha:]]{2,}",
   "IP address" = "\\b(?:\\d{1,3}\\.){3}\\d{1,3}\\b(?<!\\.0\\.0\\.0)",
   # North American numbers written with separators, e.g. (203) 555-0147,
@@ -20,16 +22,27 @@ text_patterns <- c(
 #' @param data A data frame.
 #' @param columns Columns to scan. Defaults to all columns.
 #' @param known_ids Exact identifiers to look for.
-#' @return A data frame with `column`, `type` and `cells` (number of cells
-#'   with a match). No matched values are returned.
+#' @return A data frame with `column`, `type`, `cells` (number of cells
+#'   with a match) and `rows` (the rows of `data` with a match). No matched
+#'   values are returned.
 #' @examples
 #' example <- system.file("extdata", "example_survey.csv", package = "surveyIDmasker")
 #' data <- read_survey(example)$data
 #' scan_text(data, "comment")
 #' @export
 scan_text <- function(data, columns = names(data), known_ids = character()) {
+  find_text_ids(data, columns, known_ids)
+}
+
+# scan_text(), with row numbers counted from `first_row` (e.g. the row of the
+# first response in the file, below the header rows).
+find_text_ids <- function(data, columns = names(data), known_ids = character(), first_row = 1L) {
   known_ids <- usable_ids(known_ids)
   rows <- list()
+  add <- function(col, type, hit) {
+    rows[[length(rows) + 1]] <<- data.frame(column = col, type = type, cells = sum(hit),
+                                            rows = paste(which(hit) + first_row - 1L, collapse = ", "))
+  }
   for (col in columns) {
     x <- data[[col]]
     if (!is.character(x)) next
@@ -38,15 +51,25 @@ scan_text <- function(data, columns = names(data), known_ids = character()) {
     for (type in names(text_patterns)) {
       hit <- grepl(text_patterns[[type]], x, perl = TRUE)
       hit_any <- hit_any | hit
-      if (any(hit)) rows[[length(rows) + 1]] <- data.frame(column = col, type = type, cells = sum(hit))
+      if (any(hit)) add(col, type, hit)
     }
     if (length(known_ids)) {
       hit <- lengths(find_known(x, known_ids)) > 0 & !hit_any
-      if (any(hit)) rows[[length(rows) + 1]] <- data.frame(column = col, type = "known ID", cells = sum(hit))
+      if (any(hit)) add(col, "known ID", hit)
     }
   }
-  if (!length(rows)) return(data.frame(column = character(), type = character(), cells = integer()))
+  if (!length(rows)) return(data.frame(column = character(), type = character(),
+                                       cells = integer(), rows = character()))
   do.call(rbind, rows)
+}
+
+# "row 5" or "rows 5, 9, 12", shortened after `max` rows.
+row_text <- function(rows, max = 10) {
+  vapply(strsplit(rows, ", ", fixed = TRUE), function(r) {
+    shown <- paste(utils::head(r, max), collapse = ", ")
+    if (length(r) > max) shown <- paste0(shown, " and ", length(r) - max, " more")
+    paste(if (length(r) == 1) "row" else "rows", shown)
+  }, character(1))
 }
 
 # Replaces identifiers found inside text with their masked codes.

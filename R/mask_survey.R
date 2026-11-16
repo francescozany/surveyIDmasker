@@ -8,7 +8,8 @@
 #' restores the original identifiers.
 #'
 #' Several files can be masked at once using the same key: give a vector of
-#' files or a folder, or, in the guided mode, add more files after the first.
+#' files or a folder, or, in the guided mode, select them together in the file
+#' window.
 #' The same identifier then gets the same code in every file.
 #'
 #' Run it with no arguments to be guided step by step. Anything you give as an
@@ -21,7 +22,8 @@
 #' * `<name>_masked_<date>_<time>.<ext>`, next to each original: the data to
 #'   share;
 #' * the report: what was masked, when, with which key (identified only by the
-#'   time it was created), and a SHA-256 checksum of each masked file. For one
+#'   time it was created), a SHA-256 checksum of each masked file and, with
+#'   `timestamp = TRUE`, the timestamp at its end. For one
 #'   file it is `<name>_masked_<date>_<time>_report.txt`; for several, one
 #'   `batch_masked_<date>_<time>_report.txt` in the folder of the first file;
 #' * the private key, only when no `key_file` is given:
@@ -60,16 +62,24 @@
 #' @param scan_text Look for identifiers typed into the other columns (of all
 #'   the files being masked).
 #' @param mask_text Also replace identifiers found in other columns with
-#'   their codes.
+#'   their codes. In the guided mode, what was found is shown before saving
+#'   and you are asked.
 #' @param output Path of the masked file (one file only). Defaults to
 #'   `<name>_masked_<date>_<time>.<ext>`.
 #' @param overwrite Replace existing output files.
 #' @param header_rows Number of header rows in CSV/Excel files (detected
 #'   automatically).
+#' @param timestamp Get an independent timestamp of the report from a public
+#'   timestamping service (needs an internet connection). Only the SHA-256
+#'   fingerprint of the report is sent. The timestamp is added at the end of
+#'   the report and shows that the report, and the masked files whose
+#'   fingerprints it lists, have not changed since; check it with
+#'   [verify_report()]. In the guided mode you are asked.
 #' @param quiet Do not print what was done (questions in the guided mode are
 #'   still asked).
 #' @return Invisibly, a list with the masked `data` and the paths of the
-#'   `output`, the `report` and the `key_file`. With several files, `data` is
+#'   `output`, the `report` and the `key_file`, and `timestamped` (`TRUE` when
+#'   the report was timestamped). With several files, `data` is
 #'   a list and `output` a vector, both named by file.
 #' @examples
 #' # A small made-up Qualtrics export that comes with the package,
@@ -93,11 +103,12 @@ mask_survey <- function(file = NULL, columns = NULL, ip = NULL, latlon = NULL,
                            ip_db = NULL, key_file = NULL,
                            scan_text = TRUE, mask_text = FALSE,
                            output = NULL, overwrite = FALSE,
-                           header_rows = NULL, quiet = FALSE) {
-  ask <- interactive()
+                           header_rows = NULL, timestamp = FALSE, quiet = FALSE) {
+  ask <- is_interactive()
+  guided <- ask && (is.null(file) || is.null(columns))
   say <- function(...) if (!quiet) cat(...)
   tell <- function(...) if (!quiet) message(...)
-  if (ask && (is.null(file) || is.null(columns))) {
+  if (guided) {
     if (is.null(file)) say("You can mask one file, or several files using the same key (select them together).\n")
     say("Type q at any question (or press Esc) to exit. Nothing is saved until the end.\n\n")
   }
@@ -169,6 +180,7 @@ mask_survey <- function(file = NULL, columns = NULL, ip = NULL, latlon = NULL,
     if (is.null(ip_db)) ip_of[] <- "full"
   }
   if (!is.null(ip_db) && !file.exists(ip_db)) stop("IP database not found: ", ip_db)
+  if (missing(timestamp)) timestamp <- guided && choose_timestamp()
 
   # 4. Where everything goes. All checks happen before anything is written.
   stamp <- time_stamp()
@@ -181,7 +193,8 @@ mask_survey <- function(file = NULL, columns = NULL, ip = NULL, latlon = NULL,
   } else {
     sub("\\.[^.]+$", "_report.txt", out_paths[1])
   }
-  existing <- c(out_paths, report_path)[file.exists(c(out_paths, report_path))]
+  existing <- c(out_paths, report_path)
+  existing <- existing[file.exists(existing)]
   if (!overwrite && length(existing)) {
     stop("Output already exists: ", paste(existing, collapse = ", "),
          "\nUse overwrite = TRUE to replace it.")
@@ -228,6 +241,15 @@ mask_survey <- function(file = NULL, columns = NULL, ip = NULL, latlon = NULL,
                              ip_cols[[p]], db, scan_text, mask_text, originals)
     if (batch) say(" done,", length(cols[[p]]), "column(s)\n")
   }
+  # In the guided mode, identifiers found inside other columns are shown
+  # before anything is saved, and the user decides whether to replace them.
+  found <- Filter(function(r) !is.null(r$text_found) && nrow(r$text_found) > 0, results)
+  if (guided && missing(mask_text) && length(found)) {
+    mask_text <- choose_mask_text(found, batch)
+    if (mask_text) {
+      for (p in names(found)) results[[p]] <- mask_found_text(results[[p]], cb, originals)
+    }
+  }
 
   # 6. Writing
   for (p in paths) {
@@ -240,7 +262,25 @@ mask_survey <- function(file = NULL, columns = NULL, ip = NULL, latlon = NULL,
   }
   add_key_use(key_file, basename(paths))
   write_report(report_path, paths, out_paths, results, cols, key, new_key,
-               ip_of, latlon_of, mask_text, skipped)
+               ip_of, latlon_of, mask_text, skipped, timestamp)
+  timestamped <- FALSE
+  if (timestamp) {
+    say("Getting a timestamp of the report...")
+    service <- stamp_file(report_path)
+    if (is.null(service)) {
+      # Nothing was stamped yet, so the report can still say so.
+      lines <- readLines(report_path)
+      lines[grepl("^Timestamp:", lines)] <-
+        "Timestamp:       not obtained (no internet connection, or the services did not answer)"
+      writeLines(lines, report_path)
+      say(" failed\n")
+      tell("Note: no timestamp could be obtained (no internet connection, or the services did ",
+           "not answer). Everything else was saved.")
+    } else {
+      timestamped <- TRUE
+      say(" done (", service, ")\n", sep = "")
+    }
+  }
 
   # 7. Summary
   if (batch) {
@@ -250,15 +290,16 @@ mask_survey <- function(file = NULL, columns = NULL, ip = NULL, latlon = NULL,
     }
     if (length(skipped)) tell("Not masked (no identifier columns): ", paste(basename(skipped), collapse = ", "))
     say("\nMasked files:\n", paste0("  ", basename(out_paths), "\n"), sep = "")
-    say("Report: ", basename(report_path), "\n", sep = "")
+    say("Report: ", basename(report_path), if (timestamped) " (timestamped)", "\n", sep = "")
     say("Key:    ", basename(key_file), if (new_key) " (new" else " (reused", ", created ", key$created, ")\n", sep = "")
     say("Folder: ", dirname(report_path), "\n", sep = "")
   } else {
     r <- results[[1]]
     say("\nMasked", length(cols[[1]]), "column(s):", paste(cols[[1]], collapse = ", "), "\n")
     for (note in r$notes) tell("Note: ", note)
-    if (!quiet && !is.null(r$text_found) && nrow(r$text_found)) print(r$text_found, row.names = FALSE)
-    say("Masked file: ", out_paths[[1]], "\nReport:      ", report_path, "\n", sep = "")
+    if (!is.null(r$text_found) && nrow(r$text_found)) say(paste0(found_lines(r$text_found), "\n"), sep = "")
+    say("Masked file: ", out_paths[[1]], "\nReport:      ", report_path,
+        if (timestamped) " (timestamped)", "\n", sep = "")
     say("Key:         ", key_file, if (new_key) " (new)" else " (reused)", "\n", sep = "")
   }
   if (new_key) {
@@ -270,14 +311,15 @@ mask_survey <- function(file = NULL, columns = NULL, ip = NULL, latlon = NULL,
   }, logical(1))
   say("\nTo repeat this masking in one line:\n",
       repeat_command(paths, cols, suggested, ip_of, latlon_of,
-                     ip_db, key_file, mask_text), "\n", sep = "")
+                     ip_db, key_file, mask_text, timestamp), "\n", sep = "")
 
   data_out <- lapply(results, `[[`, "data")
   if (batch) {
-    invisible(list(data = data_out, output = out_paths, report = report_path, key_file = key_file))
+    invisible(list(data = data_out, output = out_paths, report = report_path,
+                   key_file = key_file, timestamped = timestamped))
   } else {
     invisible(list(data = data_out[[1]], output = unname(out_paths), report = report_path,
-                   key_file = key_file))
+                   key_file = key_file, timestamped = timestamped))
   }
 }
 
@@ -333,17 +375,10 @@ mask_one <- function(x, columns, cb, latlon, ip, ip_cols, db, scan_text,
   text_found <- NULL
   if (scan_text) {
     others <- setdiff(names(data), columns)
-    text_found <- scan_text(data, others, known_ids = originals)
-    if (nrow(text_found)) {
-      if (mask_text) {
-        for (col in unique(text_found$column)) {
-          data[[col]] <- replace_column(data[[col]], mask_in_text(data[[col]], cb, originals))
-        }
-        notes <- c(notes, "Identifiers found inside other columns were replaced with their codes (see the report).")
-      } else {
-        notes <- c(notes, "Possible identifiers were found inside other columns (see the report). Check them, or rerun with mask_text = TRUE.")
-      }
-    }
+    # Row numbers as in the file, below its header rows.
+    text_found <- find_text_ids(data, others, known_ids = originals,
+                                first_row = NROW(x$header) + 1L)
+    if (nrow(text_found)) notes <- c(notes, text_note_found)
   }
 
   if (x$format == "sav") {
@@ -352,8 +387,23 @@ mask_one <- function(x, columns, cb, latlon, ip, ip_cols, db, scan_text,
       "%d SPSS variable label(s) longer than 256 characters were shortened (an SPSS file limit): %s.",
       sum(long), paste(names(data)[long], collapse = ", ")))
   }
-  list(data = data, notes = notes, text_found = text_found, rows = nrow(data),
-       original = x$data[columns])
+  out <- list(data = data, notes = notes, text_found = text_found, rows = nrow(data),
+              original = x$data[columns])
+  if (mask_text && !is.null(text_found) && nrow(text_found)) out <- mask_found_text(out, cb, originals)
+  out
+}
+
+text_note_found <- "Possible identifiers were found inside other columns (see the report). Check them, or rerun with mask_text = TRUE."
+text_note_masked <- "Identifiers found inside other columns were replaced with their codes (see the report)."
+
+# Replaces the identifiers found inside other columns of a masked file (a
+# result of mask_one()) with their codes.
+mask_found_text <- function(r, cb, originals) {
+  for (col in unique(r$text_found$column)) {
+    r$data[[col]] <- replace_column(r$data[[col]], mask_in_text(r$data[[col]], cb, originals))
+  }
+  r$notes[r$notes == text_note_found] <- text_note_masked
+  r
 }
 
 # How IPs or locations are masked in each file they apply to: a named
@@ -595,7 +645,7 @@ format_columns <- function(labels) {
 }
 
 write_report <- function(path, inputs, outputs, results, cols, key, new_key,
-                         ip_of, latlon_of, mask_text, skipped) {
+                         ip_of, latlon_of, mask_text, skipped, timestamp = FALSE) {
   mode_label <- function(m) if (identical(m, "country_state")) "country/US state kept" else "full"
   # One line in the header when every file uses the same rule; otherwise the
   # rule is given for each file.
@@ -621,7 +671,8 @@ write_report <- function(path, inputs, outputs, results, cols, key, new_key,
     if (!is.null(latlon)) paste("Locations:      ", mode_label(latlon), "(latitude/longitude)"),
     if (!same_loc) "Locations:       differ by file (see each file)",
     "Codes:           encrypted with a private key kept in a separate file",
-    "Blank values:    MSKblank"
+    "Blank values:    MSKblank",
+    if (timestamp) "Timestamp:       at the end of this report"
   )
   for (i in seq_along(inputs)) {
     p <- inputs[i]
@@ -639,7 +690,7 @@ write_report <- function(path, inputs, outputs, results, cols, key, new_key,
     if (!is.null(tf) && nrow(tf)) {
       lines <- c(lines, sprintf("%sPossible identifiers in other columns (%s):", pad,
                                 if (mask_text) "masked" else "NOT masked"),
-                 sprintf("%s  %-30s %-18s %d cell(s)", pad, tf$column, tf$type, tf$cells))
+                 found_lines(tf, pad))
     }
     lines <- c(lines, paste0(pad, "SHA-256 of masked file: ",
                              digest::digest(file = outputs[[p]], algo = "sha256")))
@@ -649,7 +700,9 @@ write_report <- function(path, inputs, outputs, results, cols, key, new_key,
   }
   sentence <- methods_sentence(inputs, results, cols, ip_of, latlon_of)
   lines <- c(lines, "", "For the methods section or README (edit as needed):",
-             paste0("  ", strwrap(sentence, 76)), "", "Reference:", paste0("  ", strwrap(citation_text(), 76)))
+             paste0("  ", strwrap(sentence, 76)), "", "Reference:", paste0("  ", strwrap(citation_text(), 76)),
+             # A blank line before the timestamp added at the end.
+             if (timestamp) "")
   writeLines(lines, path)
 }
 
@@ -727,7 +780,12 @@ list_columns <- function(file) {
 resolve_columns <- function(data, columns) {
   if (identical(columns, "suggested")) {
     columns <- suggest_id_columns(data)$column
-    if (!length(columns)) stop("No identifier columns were found. Give them with `columns =`.")
+    if (!length(columns)) {
+      if (any(vapply(data, is_masked_column, logical(1)))) {
+        stop("This file is already masked: no other identifier columns were found.", call. = FALSE)
+      }
+      stop("No identifier columns were found. Give them with `columns =`.")
+    }
     return(columns)
   }
   if (is.numeric(columns)) {
@@ -777,6 +835,42 @@ ask_line <- function(prompt) {
   ans
 }
 
+# One line per finding of find_text_ids(), e.g.
+#   comment                      Prolific ID        2 cell(s): rows 4, 9
+found_lines <- function(tf, pad = "") {
+  sprintf("%s  %-28s %-18s %d cell(s): %s", pad, tf$column, tf$type, tf$cells, row_text(tf$rows))
+}
+
+# Lists the identifiers found inside other columns and asks whether to replace
+# them. `found` holds the results of mask_one() that have any, named by file.
+choose_mask_text <- function(found, batch) {
+  cat("\nFound in other columns, before saving:\n")
+  for (p in names(found)) {
+    tf <- found[[p]]$text_found
+    if (batch) cat("  ", basename(p), "\n", sep = "")
+    cat(paste0(found_lines(tf, if (batch) "  " else ""), "\n"), sep = "")
+  }
+  repeat {
+    ans <- tolower(ask_line("Replace these with their codes? [Y/n, or q to exit] "))
+    if (ans %in% c("", "y", "yes")) return(TRUE)
+    if (ans %in% c("n", "no")) return(FALSE)
+    cat("Please type y or n (or q to exit).\n")
+  }
+}
+
+# interactive(), as a function of the package so that tests can replace it.
+is_interactive <- function() interactive()
+
+choose_timestamp <- function() {
+  cat("\nGet an independent timestamp for your report? (needs an internet connection).\n")
+  repeat {
+    ans <- tolower(ask_line("[Y/n, or q to exit] "))
+    if (ans %in% c("", "y", "yes")) return(TRUE)
+    if (ans %in% c("n", "no")) return(FALSE)
+    cat("Please type y or n (or q to exit).\n")
+  }
+}
+
 ask_choice <- function(title, options) {
   cat("\n", title, "\n\n", sep = "")
   cat(sprintf("%d: %s\n", seq_along(options), options), sep = "")
@@ -793,7 +887,8 @@ unknown_note <- function(region, values, what) {
   sprintf("%s: %d value(s) could not be matched to a country and got a plain MSK code.", what, n)
 }
 
-repeat_command <- function(paths, cols, suggested, ip_of, latlon_of, ip_db, key_file, mask_text) {
+repeat_command <- function(paths, cols, suggested, ip_of, latlon_of, ip_db, key_file, mask_text,
+                           timestamp = FALSE) {
   q <- function(x) paste0('"', gsub('"', '\\\\"', x), '"')
   vec <- function(x) if (length(x) == 1) q(x) else paste0("c(", paste(q(x), collapse = ", "), ")")
   one_col <- function(p) if (suggested[[p]]) q("suggested") else vec(cols[[p]])
@@ -816,7 +911,8 @@ repeat_command <- function(paths, cols, suggested, ip_of, latlon_of, ip_db, key_
             mode_arg("latlon", latlon_of),
             if (!is.null(ip_db)) paste0("ip_db = ", q(ip_db)),
             paste0("key_file = ", q(key_file)),
-            if (mask_text) "mask_text = TRUE")
+            if (mask_text) "mask_text = TRUE",
+            if (timestamp) "timestamp = TRUE")
   paste0("mask_survey(", paste(args, collapse = ",\n  "), ")")
 }
 

@@ -67,7 +67,8 @@ reidentify_one <- function(file, key, output, overwrite, header_rows, quiet = FA
     stop("The output must be a different file from the masked one.")
   }
 
-  token_re <- "(?<![A-Za-z0-9_-])MSK(?:[A-Z]{2}(?:-[A-Z0-9]{1,3})?_)?[A-Za-z0-9]{10,}(?![A-Za-z0-9_-])"
+  # A code can follow or precede a "-" when it replaced an ID inside text.
+  token_re <- "(?<![A-Za-z0-9_])MSK(?:[A-Z]{2}(?:-[A-Z0-9]{1,3})?_)?[A-Za-z0-9]{10,}(?![A-Za-z0-9_])"
   decoded <- character()   # token -> original value (NA: not made with this key)
   restored <- 0
   unknown <- 0
