@@ -135,9 +135,10 @@ After every run, the console prints the one-line command that repeats it.
 - **CSV files must be UTF-8**, as Qualtrics and most tools save them. Other
   encodings (e.g. CSVs saved by Excel in China) are refused with an error:
   save the file again as "CSV UTF-8" first.
-- **Excel files: only the first sheet** is read and written. If your file has
-  other sheets, they are not in the masked file: keep the data on one sheet,
-  or save each sheet as its own file.
+- **Excel files with several sheets**: every sheet is masked, using the same
+  key, and the masked file keeps all the sheets in their order. Sheets
+  without identifiers are kept unchanged. Only the values are kept, not the
+  formatting (colors, column widths, formulas).
 - **Before sharing**, `check_survey("my_study_masked_....csv")` lists anything
   that still looks identifying.
 - **Timestamped reports**: add `timestamp = TRUE` to get the report

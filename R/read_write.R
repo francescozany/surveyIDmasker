@@ -22,6 +22,8 @@ detect_header_rows <- function(raw) {
 #' @param path Path to the file.
 #' @param header_rows Number of header rows in CSV/Excel files. Detected
 #'   automatically when `NULL`.
+#' @param sheet For Excel files, the sheet to read (name or number). The first
+#'   one by default. [mask_survey()] masks every sheet.
 #' @return A list with `data` (a data frame), `header` (extra header rows, if
 #'   any), `names` (original column names) and `format`.
 #' @examples
@@ -30,7 +32,7 @@ detect_header_rows <- function(raw) {
 #' x$data
 #' x$header   # the question text and ImportId rows of the Qualtrics export
 #' @export
-read_survey <- function(path, header_rows = NULL) {
+read_survey <- function(path, header_rows = NULL, sheet = 1) {
   if (!file.exists(path)) stop("File not found: ", path)
   if (file.size(path) == 0) stop(basename(path), " is empty.", call. = FALSE)
   ext <- tolower(tools::file_ext(path))
@@ -40,7 +42,7 @@ read_survey <- function(path, header_rows = NULL) {
                names = NULL),
     dta = list(data = haven::read_dta(path), header = NULL, format = "dta",
                names = NULL),
-    xlsx = read_q_xlsx(path, header_rows),
+    xlsx = read_q_xlsx(path, header_rows, sheet),
     stop("Unsupported file type '.", ext, "'. Use a .csv, .sav, .dta or .xlsx file.")
   )
 }
@@ -62,18 +64,58 @@ read_q_csv <- function(path, header_rows) {
        format = "csv", bom = bom)
 }
 
-read_q_xlsx <- function(path, header_rows) {
-  top <- readxl::read_excel(path, col_names = FALSE, col_types = "text",
+read_q_xlsx <- function(path, header_rows, sheet = 1) {
+  sheets <- readxl::excel_sheets(path)
+  name <- if (is.numeric(sheet)) sheets[sheet] else sheet
+  if (length(name) != 1 || is.na(name) || !name %in% sheets) {
+    stop(basename(path), " has no sheet ", sheet, ". Its sheets: ", paste(sheets, collapse = ", "), call. = FALSE)
+  }
+  top <- readxl::read_excel(path, sheet = name, col_names = FALSE, col_types = "text",
                             n_max = 3, .name_repair = "minimal")
   top <- as.data.frame(top, stringsAsFactors = FALSE)
+  if (!nrow(top)) {
+    return(list(data = data.frame(), header = top, names = character(), format = "xlsx", sheet = name))
+  }
   h <- if (is.null(header_rows)) detect_header_rows(top) else header_rows
-  data <- readxl::read_excel(path, col_names = FALSE, skip = h,
+  data <- readxl::read_excel(path, sheet = name, col_names = FALSE, skip = h,
                              guess_max = 1e5, .name_repair = "minimal")
   data <- as.data.frame(data, stringsAsFactors = FALSE)
   orig_names <- unlist(top[1, ], use.names = FALSE)
+  # A sheet with fewer data columns than header columns (or none, when it has
+  # only header rows): the missing columns are empty.
+  for (j in seq_len(length(orig_names) - ncol(data)) + ncol(data)) data[[j]] <- rep(NA, nrow(data))
+  if (ncol(data) > length(orig_names)) {
+    extra <- (length(orig_names) + 1):ncol(data)
+    orig_names[extra] <- NA
+    for (j in extra) top[[j]] <- NA_character_
+  }
+  orig_names[is.na(orig_names)] <- ""
   names(data) <- make.unique(orig_names)
   list(data = data, header = top[seq_len(h), , drop = FALSE], names = orig_names,
-       format = "xlsx", sheet = readxl::excel_sheets(path)[1])
+       format = "xlsx", sheet = name)
+}
+
+# The parts of a file that are masked: each sheet of an Excel file, or the
+# whole file. Named by `path`, or "path [sheet]" for Excel files with several
+# sheets (sheet names cannot contain "[" or "]").
+read_units <- function(path, header_rows = NULL) {
+  if (tolower(tools::file_ext(path)) != "xlsx") return(stats::setNames(list(read_survey(path, header_rows)), path))
+  sheets <- readxl::excel_sheets(path)
+  if (length(sheets) == 1) return(stats::setNames(list(read_survey(path, header_rows)), path))
+  units <- lapply(sheets, function(s) read_survey(path, header_rows, sheet = s))
+  stats::setNames(units, paste0(path, " [", sheets, "]"))
+}
+
+# The file a part belongs to, and how it is called on screen and in reports.
+unit_file <- function(unit) sub(" \\[[^][]*\\]$", "", unit)
+unit_label <- function(unit) basename(unit)
+
+# "study.xlsx: 3 sheets (Data: 120 rows, 30 columns; ...)" or "study.csv: 120 rows, 30 columns".
+units_summary <- function(units) {
+  size <- function(x) sprintf("%d rows, %d columns", nrow(x$data), ncol(x$data))
+  if (length(units) == 1) return(sprintf("%s: %s", basename(unit_file(names(units))), size(units[[1]])))
+  sprintf("%s: %d sheets (%s)", basename(unit_file(names(units)[1])), length(units),
+          paste(vapply(units, function(x) paste0(x$sheet, ": ", size(x)), character(1)), collapse = "; "))
 }
 
 # CSV files must be UTF-8 (with or without BOM), as Qualtrics and most tools
@@ -106,15 +148,26 @@ write_survey <- function(x, path) {
     },
     sav = write_sav_any(x$data, path),
     dta = haven::write_dta(x$data, path),
-    xlsx = {
-      wb <- openxlsx::createWorkbook()
-      openxlsx::addWorksheet(wb, x$sheet)
-      openxlsx::writeData(wb, 1, x$header, colNames = FALSE)
-      openxlsx::writeData(wb, 1, x$data, startRow = nrow(x$header) + 1,
-                          colNames = FALSE, keepNA = FALSE)
-      openxlsx::saveWorkbook(wb, path, overwrite = TRUE)
-    }
+    xlsx = write_workbook(list(x), path)
   )
+  invisible(path)
+}
+
+# Writes the sheets (results of read_survey()) into one Excel file, in order.
+# Only the values are written. The workbook's author is the computer's user
+# name (openxlsx's default).
+write_workbook <- function(sheets, path) {
+  wb <- openxlsx::createWorkbook()
+  for (i in seq_along(sheets)) {
+    x <- sheets[[i]]
+    openxlsx::addWorksheet(wb, x$sheet)
+    if (nrow(x$header)) openxlsx::writeData(wb, i, x$header, colNames = FALSE)
+    if (ncol(x$data)) {
+      openxlsx::writeData(wb, i, x$data, startRow = nrow(x$header) + 1,
+                          colNames = FALSE, keepNA = FALSE)
+    }
+  }
+  openxlsx::saveWorkbook(wb, path, overwrite = TRUE)
   invisible(path)
 }
 

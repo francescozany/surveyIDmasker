@@ -3,7 +3,7 @@
 #' Lists what still looks identifying in a survey file (e.g. a masked file
 #' before you share it): identifier columns that are not masked, and
 #' identifiers typed into other columns. No key is needed and the file is not
-#' changed.
+#' changed. Every sheet of an Excel file is checked.
 #'
 #' @param file Path to a survey data file (.csv, .sav, .dta or .xlsx), a
 #'   vector of such paths, or a folder.
@@ -29,26 +29,29 @@ check_survey <- function(file, header_rows = NULL, quiet = FALSE) {
   say <- function(...) if (!quiet) cat(...)
   found <- list()
   for (f in expand_files(file)) {
-    data <- read_survey(f, header_rows)$data
-    masked <- names(data)[vapply(data, is_masked_column, logical(1))]
-    cols <- suggest_id_columns(data)
-    cols <- cols[!cols$column %in% masked, ]
-    text <- scan_text(data, setdiff(names(data), c(masked, cols$column)))
-    rows <- rbind(
-      data.frame(column = cols$column, issue = cols$reason,
-                 cells = vapply(cols$column, function(c) sum(!is_blank(as.character(data[[c]]))), numeric(1))),
-      data.frame(column = text$column, issue = paste0(text$type, rep(" in text", nrow(text))),
-                 cells = text$cells)
-    )
-    say(sprintf("%s: %d rows, %d columns\n", basename(f), nrow(data), ncol(data)))
-    if (length(masked)) say("  Masked columns:", paste(masked, collapse = ", "), "\n")
-    if (nrow(rows)) {
-      say("  Still looks identifying:\n")
-      say(sprintf("    %-28s %-36s %d cell(s)\n", rows$column, rows$issue, rows$cells), sep = "")
-    } else {
-      say("  Nothing else that looks identifying was found.\n")
+    units <- read_units(f, header_rows)
+    for (u in names(units)) {
+      data <- units[[u]]$data
+      masked <- names(data)[vapply(data, is_masked_column, logical(1))]
+      cols <- suggest_id_columns(data)
+      cols <- cols[!cols$column %in% masked, ]
+      text <- scan_text(data, setdiff(names(data), c(masked, cols$column)))
+      rows <- rbind(
+        data.frame(column = cols$column, issue = cols$reason,
+                   cells = vapply(cols$column, function(c) sum(!is_blank(as.character(data[[c]]))), numeric(1))),
+        data.frame(column = text$column, issue = paste0(text$type, rep(" in text", nrow(text))),
+                   cells = text$cells)
+      )
+      say(sprintf("%s: %d rows, %d columns\n", unit_label(u), nrow(data), ncol(data)))
+      if (length(masked)) say("  Masked columns:", paste(masked, collapse = ", "), "\n")
+      if (nrow(rows)) {
+        say("  Still looks identifying:\n")
+        say(sprintf("    %-28s %-36s %d cell(s)\n", rows$column, rows$issue, rows$cells), sep = "")
+      } else {
+        say("  Nothing else that looks identifying was found.\n")
+      }
+      if (nrow(rows)) found[[u]] <- cbind(file = unit_label(u), rows)
     }
-    if (nrow(rows)) found[[f]] <- cbind(file = basename(f), rows)
   }
   out <- if (length(found)) do.call(rbind, found) else
     data.frame(file = character(), column = character(), issue = character(), cells = numeric())

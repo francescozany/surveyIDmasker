@@ -21,7 +21,8 @@ automatically).}
 Invisibly, a data frame with one row per masked file: \code{report},
 \code{file}, \code{listed_as} (the name in the report), \code{renamed},
 \code{matches_report}, \code{timestamp} (\code{"valid"}, \code{"changed"}, \code{"invalid"},
-\code{"missing"} or \code{"none"}), \code{timestamped_at} and \code{masked_columns}.
+\code{"missing"} or \code{"none"}), \code{timestamped_at} and \code{masked_columns} (for
+Excel files with several sheets, by sheet: \code{"Data: workerId; Pilot: workerId"}).
 }
 \description{
 Checks that masked files have not changed since their report was written,

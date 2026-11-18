@@ -17,6 +17,12 @@
 * Identifiers found inside other columns are now listed with the rows they
   are in (numbered as in the file, below its header rows), on screen and in
   the report. `scan_text()` returns them in a new `rows` column.
+* Excel files with several sheets: every sheet is masked, using the same key,
+  and the masked file keeps all the sheets. The report has a section for each
+  sheet, and `verify_report()`, `check_survey()` and `reidentify()` read every
+  sheet. Before, only the first sheet was masked and the others were left out
+  of the masked file. `read_survey()` and `list_columns()` get a `sheet`
+  argument.
 * `verify_report()` recognizes a report by its content, so a renamed copy
   (e.g. `..._report copy.txt`) works too. A masked file that was only renamed
   is recognized by its content as well, and shown as "yes, only the file name

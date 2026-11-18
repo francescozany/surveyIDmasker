@@ -102,6 +102,11 @@ runs without any questions (handy for scripts). Nothing is written until
 every question is answered. At the end, the one-line command that repeats
 the same masking is printed.
 
+Every sheet of an Excel file is masked, using the same key; the masked file
+keeps all the sheets (values only, not the formatting), and sheets without
+columns to mask are kept unchanged. With several sheets, \code{columns} can be a
+list named by sheet, e.g. \code{list("study.xlsx [Data]" = "workerId")}.
+
 The original files are never changed. Files written:
 \itemize{
 \item \verb{<name>_masked_<date>_<time>.<ext>}, next to each original: the data to

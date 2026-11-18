@@ -23,7 +23,7 @@ Invisibly, a data frame with one row per finding: \code{file},
 Lists what still looks identifying in a survey file (e.g. a masked file
 before you share it): identifier columns that are not masked, and
 identifiers typed into other columns. No key is needed and the file is not
-changed.
+changed. Every sheet of an Excel file is checked.
 }
 \examples{
 # A small made-up Qualtrics export that comes with the package,

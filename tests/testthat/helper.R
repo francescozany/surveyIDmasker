@@ -17,3 +17,27 @@ fake_export <- function(dir) {
   writeLines(lines, path)
   path
 }
+
+# A made-up Excel file with several sheets: a Qualtrics-like "Data" sheet,
+# a "Pilot" sheet with one participant in common, a "Notes" sheet without
+# identifiers and an empty sheet.
+fake_workbook <- function(dir) {
+  path <- file.path(dir, "study.xlsx")
+  wb <- openxlsx::createWorkbook()
+  openxlsx::addWorksheet(wb, "Data")
+  data <- data.frame(
+    StartDate = c("Start Date", "2026-01-01 10:00:00", "2026-01-01 11:00:00", "2026-01-01 12:00:00"),
+    IPAddress = c("IP Address", "1.2.3.4", "5.6.7.8", "1.2.3.4"),
+    PROLIFIC_PID = c("PROLIFIC_PID", "5f1a2b3c4d5e6f7a8b9c0d1e", "aaaaaaaaaaaaaaaaaaaaaaaa", ""),
+    comment = c("Any comments?", "nice", "my id is aaaaaaaaaaaaaaaaaaaaaaaa", "fine"),
+    stringsAsFactors = FALSE)
+  openxlsx::writeData(wb, "Data", data)
+  openxlsx::addWorksheet(wb, "Pilot")
+  openxlsx::writeData(wb, "Pilot", data.frame(workerId = c("5f1a2b3c4d5e6f7a8b9c0d1e", "bbbbbbbbbbbbbbbbbbbbbbbb"),
+                                               score = c(3, 5)))
+  openxlsx::addWorksheet(wb, "Notes")
+  openxlsx::writeData(wb, "Notes", data.frame(note = c("Pilot run in January", "Data cleaned by RA")))
+  openxlsx::addWorksheet(wb, "Empty")
+  openxlsx::saveWorkbook(wb, path)
+  path
+}

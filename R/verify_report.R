@@ -16,7 +16,9 @@
 #' @return Invisibly, a data frame with one row per masked file: `report`,
 #'   `file`, `listed_as` (the name in the report), `renamed`,
 #'   `matches_report`, `timestamp` (`"valid"`, `"changed"`, `"invalid"`,
-#'   `"missing"` or `"none"`), `timestamped_at` and `masked_columns`.
+#'   `"missing"` or `"none"`), `timestamped_at` and `masked_columns` (for
+#'   Excel files with several sheets, by sheet: `"Data: workerId; Pilot:
+#'   workerId"`).
 #' @examples
 #' # A small made-up Qualtrics export that comes with the package,
 #' # copied to a temporary folder
@@ -82,9 +84,15 @@ verify_report <- function(file, header_rows = NULL, quiet = FALSE) {
       matches <- if (found && nzchar(listed) && !is.na(hashes[listed])) {
         identical(digest::digest(file = f, algo = "sha256"), hashes[[listed]])
       } else NA
+      # The masked columns, by sheet for Excel files with several sheets.
       masked <- if (found) {
-        data <- read_survey(f, header_rows)$data
-        names(data)[vapply(data, is_masked_column, logical(1))]
+        units <- read_units(f, header_rows)
+        by_part <- lapply(units, function(x) names(x$data)[vapply(x$data, is_masked_column, logical(1))])
+        if (length(units) > 1) {
+          by_part <- by_part[lengths(by_part) > 0]
+          paste0(vapply(units[names(by_part)], `[[`, "", "sheet"), ": ",
+                 vapply(by_part, paste, "", collapse = ", "))
+        } else by_part[[1]]
       } else character()
       if (report != "(none)") {
         say("  ", basename(f), "\n", sep = "")
@@ -97,14 +105,15 @@ verify_report <- function(file, header_rows = NULL, quiet = FALSE) {
       }
       if (found) {
         if (report != "(none)") say("    Masked columns:     ")
-        say(if (length(masked)) paste(masked, collapse = ", ") else "none", "\n", sep = "")
+        say(if (length(masked)) paste(masked, collapse = if (any(grepl(": ", masked, fixed = TRUE))) "; " else ", ")
+            else "none", "\n", sep = "")
       }
       rows[[length(rows) + 1]] <- data.frame(
         report = if (report == "(none)") NA_character_ else basename(report),
         file = basename(f), listed_as = if (nzchar(listed)) listed else NA_character_,
         renamed = renamed, matches_report = matches, timestamp = ts$status,
         timestamped_at = ts$time %||% as.POSIXct(NA, tz = "UTC"),
-        masked_columns = paste(masked, collapse = ", "))
+        masked_columns = paste(masked, collapse = if (any(grepl(": ", masked, fixed = TRUE))) "; " else ", "))
     }
   }
   out <- do.call(rbind, rows)
