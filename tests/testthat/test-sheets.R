@@ -41,6 +41,21 @@ test_that("every sheet of an Excel file is masked, with one key", {
   expect_equal(unique(check_survey(wb, quiet = TRUE)$file), c("study.xlsx [Data]", "study.xlsx [Pilot]"))
 })
 
+test_that("the repeat command runs when pasted, also with Windows paths", {
+  paths <- c("C:\\Users\\me\\study.xlsx [Data]", "C:\\Users\\me\\study.xlsx [Pilot]")
+  cols <- stats::setNames(list("PROLIFIC_PID", c("work\\er", 'say "hi"')), paths)
+  cmd <- repeat_command(paths, cols, stats::setNames(c(FALSE, FALSE), paths),
+                        ip_of = stats::setNames(c("full", "country"), paths), latlon_of = NULL,
+                        ip_db = NULL, key_file = "C:\\Users\\me\\key.csv", mask_text = FALSE)
+  call <- parse(text = cmd)[[1]]
+  expect_equal(eval(call[[2]]), "C:/Users/me/study.xlsx")
+  expect_equal(eval(call$key_file), "C:/Users/me/key.csv")
+  expect_equal(eval(call$columns)[["study.xlsx [Pilot]"]], c("work\\er", 'say "hi"'))
+  expect_equal(eval(call$ip), list("study.xlsx [Data]" = "full", "study.xlsx [Pilot]" = "country"))
+  # A file named with backslashes or forward slashes is the same file.
+  expect_equal(columns_for(list("C:/Users/me/a.csv" = "id"), "C:\\Users\\me\\a.csv", "C:\\Users\\me\\a.csv"), "id")
+})
+
 test_that("columns can be given by sheet, and a sheet left out is not masked", {
   dir <- withr_tempdir()
   wb <- fake_workbook(dir)

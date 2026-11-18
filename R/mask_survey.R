@@ -453,6 +453,7 @@ modes_by_file <- function(value, applies, paths, name) {
     out[] <- check(value[[1]])
     return(out)
   }
+  names(value) <- slash_path(names(value))
   bad <- setdiff(names(value), unlist(lapply(paths, part_names)))
   if (length(bad)) stop("`", name, "` names a file that is not being masked: ", paste(bad, collapse = ", "), call. = FALSE)
   for (p in applies) {
@@ -559,13 +560,14 @@ survey_files <- function(dir) {
 # its own columns.
 columns_for <- function(columns, path, paths) {
   if (!is.list(columns)) return(columns)
+  names(columns) <- slash_path(names(columns))
   hit <- intersect(part_names(path), names(columns))
   if (!length(hit)) {
     # A sheet left out of the list is not masked.
     if (unit_file(path) != path) return(character())
     stop("`columns` has no entry for ", basename(path), call. = FALSE)
   }
-  if (sum(basename(paths) == basename(path)) > 1 && !path %in% names(columns)) {
+  if (sum(basename(paths) == basename(path)) > 1 && !slash_path(path) %in% names(columns)) {
     stop("Several files are called ", basename(path), ": name them by full path in `columns`.", call. = FALSE)
   }
   columns[[hit[1]]]
@@ -573,7 +575,9 @@ columns_for <- function(columns, path, paths) {
 
 # The names a part can be given by in a list (`columns`, `ip`, `latlon`): the
 # part itself ("study.xlsx [Data]", with or without its folder), then its file.
-part_names <- function(part) unique(c(part, basename(part), unit_file(part), basename(unit_file(part))))
+# Folders are compared with forward slashes, so "C:/data/a.csv" and
+# "C:\\data\\a.csv" are the same file.
+part_names <- function(part) slash_path(unique(c(part, basename(part), unit_file(part), basename(unit_file(part)))))
 
 # With several files a file without the given columns, or without suggested
 # ones, is left out (and listed in the report) instead of stopping everything.
@@ -951,10 +955,12 @@ unknown_note <- function(region, values, what) {
 
 repeat_command <- function(paths, cols, suggested, ip_of, latlon_of, ip_db, key_file, mask_text,
                            timestamp = FALSE) {
-  q <- function(x) paste0('"', gsub('"', '\\\\"', x), '"')
+  # Paths are written with forward slashes, which R reads on every system
+  # (Windows paths with backslashes would not run when pasted).
+  q <- r_string
   vec <- function(x) if (length(x) == 1) q(x) else paste0("c(", paste(q(x), collapse = ", "), ")")
   one_col <- function(p) if (suggested[[p]]) q("suggested") else vec(cols[[p]])
-  files <- unique(unit_file(paths))
+  files <- slash_path(unique(unit_file(paths)))
   file_arg <- if (length(files) == 1) q(files) else paste0("c(", paste(q(files), collapse = ",\n    "), ")")
   if (length(paths) == 1) {
     col_arg <- paste0("columns = ", if (suggested[[1]]) q("suggested") else vec(cols[[1]]))
@@ -962,7 +968,8 @@ repeat_command <- function(paths, cols, suggested, ip_of, latlon_of, ip_db, key_
     col_arg <- if (all(suggested)) {
       'columns = "suggested"'
     } else {
-      nm <- if (anyDuplicated(basename(paths))) paths else basename(paths)
+      sp <- slash_path(paths)
+      nm <- if (anyDuplicated(basename(sp))) sp else basename(sp)
       paste0("columns = list(\n      ",
              paste(paste0(q(nm), " = ", vapply(paths, one_col, character(1))), collapse = ",\n      "),
              ")")
@@ -971,18 +978,24 @@ repeat_command <- function(paths, cols, suggested, ip_of, latlon_of, ip_db, key_
   args <- c(file_arg, col_arg,
             mode_arg("ip", ip_of),
             mode_arg("latlon", latlon_of),
-            if (!is.null(ip_db)) paste0("ip_db = ", q(ip_db)),
-            paste0("key_file = ", q(key_file)),
+            if (!is.null(ip_db)) paste0("ip_db = ", q(slash_path(ip_db))),
+            paste0("key_file = ", q(slash_path(key_file))),
             if (mask_text) "mask_text = TRUE",
             if (timestamp) "timestamp = TRUE")
   paste0("mask_survey(", paste(args, collapse = ",\n  "), ")")
 }
 
+# A string written as R code: backslashes and quotes escaped.
+r_string <- function(x) paste0('"', gsub('"', '\\\\"', gsub("\\\\", "\\\\\\\\", x)), '"')
+
+slash_path <- function(x) if (length(x)) gsub("\\\\", "/", x) else x
+
 # `ip = "full"` when every file uses the same rule, otherwise a list by file.
 mode_arg <- function(name, modes) {
   if (!length(modes)) return(NULL)
-  q <- function(x) paste0('"', x, '"')
+  q <- r_string
   if (length(unique(modes)) == 1) return(paste0(name, " = ", q(modes[[1]])))
-  nm <- if (anyDuplicated(basename(names(modes)))) names(modes) else basename(names(modes))
+  sp <- slash_path(names(modes))
+  nm <- if (anyDuplicated(basename(sp))) sp else basename(sp)
   paste0(name, " = list(", paste(paste0(q(nm), " = ", q(modes)), collapse = ", "), ")")
 }

@@ -34,6 +34,10 @@
   `1ABC23D4-56E7-8F90-A123-A4BC56789012.jpg`) is no longer taken for an MTurk
   worker ID.
 * `reidentify()` restores codes that were put next to a dash inside text.
+* On Windows, the repeat command printed at the end of `mask_survey()` gave
+  an error when pasted, because of the backslashes in the file paths. Paths
+  are now written with forward slashes, and a file can be named with either
+  kind of slash in `columns`, `ip` and `latlon`.
 * The help page of `mask_survey()` no longer says the guided mode adds more
   files after the first: several files are selected together in the file
   window.
