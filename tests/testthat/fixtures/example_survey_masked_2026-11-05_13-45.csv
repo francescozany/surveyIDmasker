@@ -1,0 +1,8 @@
+StartDate,EndDate,IPAddress,LocationLatitude,LocationLongitude,PROLIFIC_PID,age,rating,comment
+Start Date,End Date,IP Address,Location Latitude,Location Longitude,PROLIFIC_PID,What is your age?,How much did you like the product?,Any comments?
+"{""ImportId"":""startDate""}","{""ImportId"":""endDate""}","{""ImportId"":""ipAddress""}","{""ImportId"":""locationLatitude""}","{""ImportId"":""locationLongitude""}","{""ImportId"":""PROLIFIC_PID""}","{""ImportId"":""QID1_TEXT""}","{""ImportId"":""QID2""}","{""ImportId"":""QID3_TEXT""}"
+2026-01-05 10:02:11,2026-01-05 10:09:40,MSK4RlOuHec5VN7pSdmjf8TEMxx3vPbUcTpT6B,MSKE48gzsxeExGR6yYwSVB3Ppdw7f6MGtnMIVrgv,MSKFWM7kRaLx6otwqstW6uUWJ9myPoY69J1AUlxO,MSKG1hB4j6Jr4NqEyHXRQAYgMCkHu8TgADNfLyJEXObqEeVG,34,6,
+2026-01-05 10:15:03,2026-01-05 10:21:55,MSKBcyKMpX58s6t2ebzxTFDb0Pa8roFRchMejrd,MSKBce6heTPpAwnHIc2aeQZr1xaB5GFirCIRdIa,MSKvOnAjkRz7KMz4hkyvvKhi41I3zlA1Bflu3t,MSKEaIp1uVagAO3mXebLzTkMmox0i6rxFgTLYXK33DxPprUy,27,4,my id is 1f2e3d4c5b6a79880716a5b4
+2026-01-05 11:40:29,2026-01-05 11:48:02,MSK6lPTb38gH5MrnrbGMUCKlLQ4NNkdtOvnTEp,MSKGJTJ2CBZhnXD5mx0qrn69efzYB9pPi2yKZsLK,MSKFBTR7XjQsGfgMS4Ts7PhxSpinerKdkYjE8Lfa,MSKFVp7N4laDrDJKITFWlysE6FA03IsMzLRHxSVrkBuLOXSz,45,7,nice study
+2026-01-06 09:12:45,2026-01-06 09:20:31,MSK4RlOuHec5VN7pSdmjf8TEMxx3vPbUcTpT6B,MSKE48gzsxeExGR6yYwSVB3Ppdw7f6MGtnMIVrgv,MSKFWM7kRaLx6otwqstW6uUWJ9myPoY69J1AUlxO,MSKG1hB4j6Jr4NqEyHXRQAYgMCkHu8TgADNfLyJEXObqEeVG,34,5,second time here
+2026-01-06 14:05:17,2026-01-06 14:12:09,MSKBcUn4goEqVP2p34blbZO2sudN0OzT3z41Vb8,MSKblank,MSKblank,MSKH70YsAcEK1CWwzP0ANVSHsvKYSBoeswWP0Zc1Li0KT7tP,52,3,

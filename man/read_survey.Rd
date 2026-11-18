@@ -4,13 +4,16 @@
 \alias{read_survey}
 \title{Read a survey data file}
 \usage{
-read_survey(path, header_rows = NULL)
+read_survey(path, header_rows = NULL, sheet = 1)
 }
 \arguments{
 \item{path}{Path to the file.}
 
 \item{header_rows}{Number of header rows in CSV/Excel files. Detected
 automatically when \code{NULL}.}
+
+\item{sheet}{For Excel files, the sheet to read (name or number). The first
+one by default. \code{\link[=mask_survey]{mask_survey()}} masks every sheet.}
 }
 \value{
 A list with \code{data} (a data frame), \code{header} (extra header rows, if

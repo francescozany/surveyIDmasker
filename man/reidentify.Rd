@@ -33,7 +33,8 @@ automatically).}
 \value{
 Invisibly, a list with the re-identified \code{data} and the \code{output}
 path. With several files, \code{data} is a list and \code{output} a vector, both
-named by file.
+named by file. For an Excel file with several sheets, \code{data} is a list
+named by sheet.
 }
 \description{
 Reads a file masked by \code{\link[=mask_survey]{mask_survey()}} and, using the private key file,

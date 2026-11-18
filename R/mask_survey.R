@@ -8,7 +8,8 @@
 #' restores the original identifiers.
 #'
 #' Several files can be masked at once using the same key: give a vector of
-#' files or a folder, or, in the guided mode, add more files after the first.
+#' files or a folder, or, in the guided mode, select them together in the file
+#' window.
 #' The same identifier then gets the same code in every file.
 #'
 #' Run it with no arguments to be guided step by step. Anything you give as an
@@ -17,11 +18,17 @@
 #' every question is answered. At the end, the one-line command that repeats
 #' the same masking is printed.
 #'
+#' Every sheet of an Excel file is masked, using the same key; the masked file
+#' keeps all the sheets (values only, not the formatting), and sheets without
+#' columns to mask are kept unchanged. With several sheets, `columns` can be a
+#' list named by sheet, e.g. `list("study.xlsx [Data]" = "workerId")`.
+#'
 #' The original files are never changed. Files written:
 #' * `<name>_masked_<date>_<time>.<ext>`, next to each original: the data to
 #'   share;
 #' * the report: what was masked, when, with which key (identified only by the
-#'   time it was created), and a SHA-256 checksum of each masked file. For one
+#'   time it was created), a SHA-256 checksum of each masked file and, with
+#'   `timestamp = TRUE`, the timestamp at its end. For one
 #'   file it is `<name>_masked_<date>_<time>_report.txt`; for several, one
 #'   `batch_masked_<date>_<time>_report.txt` in the folder of the first file;
 #' * the private key, only when no `key_file` is given:
@@ -60,16 +67,24 @@
 #' @param scan_text Look for identifiers typed into the other columns (of all
 #'   the files being masked).
 #' @param mask_text Also replace identifiers found in other columns with
-#'   their codes.
+#'   their codes. In the guided mode, what was found is shown before saving
+#'   and you are asked.
 #' @param output Path of the masked file (one file only). Defaults to
 #'   `<name>_masked_<date>_<time>.<ext>`.
 #' @param overwrite Replace existing output files.
 #' @param header_rows Number of header rows in CSV/Excel files (detected
 #'   automatically).
+#' @param timestamp Get an independent timestamp of the report from a public
+#'   timestamping service (needs an internet connection). Only the SHA-256
+#'   fingerprint of the report is sent. The timestamp is added at the end of
+#'   the report and shows that the report, and the masked files whose
+#'   fingerprints it lists, have not changed since; check it with
+#'   [verify_report()]. In the guided mode you are asked.
 #' @param quiet Do not print what was done (questions in the guided mode are
 #'   still asked).
 #' @return Invisibly, a list with the masked `data` and the paths of the
-#'   `output`, the `report` and the `key_file`. With several files, `data` is
+#'   `output`, the `report` and the `key_file`, and `timestamped` (`TRUE` when
+#'   the report was timestamped). With several files, `data` is
 #'   a list and `output` a vector, both named by file.
 #' @examples
 #' # A small made-up Qualtrics export that comes with the package,
@@ -93,49 +108,60 @@ mask_survey <- function(file = NULL, columns = NULL, ip = NULL, latlon = NULL,
                            ip_db = NULL, key_file = NULL,
                            scan_text = TRUE, mask_text = FALSE,
                            output = NULL, overwrite = FALSE,
-                           header_rows = NULL, quiet = FALSE) {
-  ask <- interactive()
+                           header_rows = NULL, timestamp = FALSE, quiet = FALSE) {
+  ask <- is_interactive()
+  guided <- ask && (is.null(file) || is.null(columns))
   say <- function(...) if (!quiet) cat(...)
   tell <- function(...) if (!quiet) message(...)
-  if (ask && (is.null(file) || is.null(columns))) {
+  if (guided) {
     if (is.null(file)) say("You can mask one file, or several files using the same key (select them together).\n")
     say("Type q at any question (or press Esc) to exit. Nothing is saved until the end.\n\n")
   }
 
-  # 1. The files
+  # 1. The files. Each sheet of an Excel file is masked as a part of its own;
+  # `files` holds the parts (the whole file, or one sheet), named by part.
   if (is.null(file)) {
     if (!ask) stop("Please give the path of the file to mask.")
     files <- choose_files(header_rows)
   } else {
-    files <- expand_files(file)
-    files <- lapply(stats::setNames(files, files), function(f) {
-      x <- read_survey(f, header_rows)
-      say(sprintf("Read %s: %d rows, %d columns.\n", basename(f), nrow(x$data), ncol(x$data)))
-      x
-    })
+    files <- list()
+    for (f in expand_files(file)) {
+      units <- read_units(f, header_rows)
+      say("Read ", units_summary(units), ".\n", sep = "")
+      files <- c(files, units)
+    }
   }
   paths <- names(files)
   n <- length(files)
-  batch <- n > 1
+  input_files <- unique(unit_file(paths))
+  batch <- length(input_files) > 1   # several files: one report and key for all
+  multi <- n > 1                     # several parts: files or sheets
   if (batch && !is.null(output)) stop("`output` can only be used with one file.", call. = FALSE)
-  if (batch && is.numeric(columns)) {
-    stop("Column numbers differ from file to file: with several files, give column names, ",
+  if (multi && is.numeric(columns)) {
+    stop("Column numbers differ from file to file (and sheet to sheet): give column names, ",
          "\"suggested\", or a list named by file.", call. = FALSE)
   }
-  if (batch) say(sprintf("\n%d files will be masked using the same key.\n", n))
+  if (batch) say(sprintf("\n%d files will be masked using the same key.\n", length(input_files)))
+  if (!batch && multi) say("\nEach sheet will be masked, using the same key.\n")
 
   # 2. The columns of each file
   skipped <- character()
   cols <- list()
   for (i in seq_len(n)) {
     data <- files[[i]]$data
-    if (batch && is.null(columns) && ask) {
-      say("\n", rule(sprintf("File %d of %d: %s", i, n, basename(paths[i]))), "\n", sep = "")
+    # An empty sheet has nothing to mask.
+    if (!ncol(data)) {
+      skipped <- c(skipped, paths[i])
+      next
+    }
+    if (multi && is.null(columns) && ask) {
+      what <- if (batch) "File" else "Sheet"
+      say("\n", rule(sprintf("%s %d of %d: %s", what, i, n, unit_label(paths[i]))), "\n", sep = "")
     }
     sel <- if (is.null(columns)) {
-      choose_columns(data, ask, batch)
+      choose_columns(data, ask, multi)
     } else {
-      batch_columns(data, columns_for(columns, paths[i], paths), batch, basename(paths[i]))
+      batch_columns(data, columns_for(columns, paths[i], paths), multi, unit_label(paths[i]))
     }
     if (length(sel)) cols[[paths[i]]] <- sel else skipped <- c(skipped, paths[i])
   }
@@ -156,9 +182,10 @@ mask_survey <- function(file = NULL, columns = NULL, ip = NULL, latlon = NULL,
   # The guided mode asks once for all files; different rules per file are
   # set with a list in `ip`/`latlon`.
   if (length(undecided)) {
-    if (ask && batch) {
-      title <- if (length(undecided) == length(paths)) sprintf("For all %d files", length(paths)) else
-        paste("IP addresses and locations:", paste(basename(undecided), collapse = ", "))
+    if (ask && multi) {
+      title <- if (length(undecided) == length(paths)) {
+        sprintf("For all %d %s", length(paths), if (batch) "files" else "sheets")
+      } else paste("IP addresses and locations:", paste(unit_label(undecided), collapse = ", "))
       say("\n", rule(title), "\n", sep = "")
     }
     if (anyNA(latlon_of)) latlon_of[is.na(latlon_of)] <- choose_mode(NULL, "latitude/longitude", ask)
@@ -169,24 +196,27 @@ mask_survey <- function(file = NULL, columns = NULL, ip = NULL, latlon = NULL,
     if (is.null(ip_db)) ip_of[] <- "full"
   }
   if (!is.null(ip_db) && !file.exists(ip_db)) stop("IP database not found: ", ip_db)
+  if (missing(timestamp)) timestamp <- guided && choose_timestamp()
 
   # 4. Where everything goes. All checks happen before anything is written.
   stamp <- time_stamp()
-  out_paths <- vapply(paths, function(p) {
+  masked_files <- unique(unit_file(paths))
+  out_paths <- vapply(masked_files, function(p) {
     output %||% sub("(\\.[^.]+)$", paste0("_masked_", stamp, "\\1"), p)
   }, character(1))
-  first <- paths[1]
+  first <- masked_files[1]
   report_path <- if (batch) {
     file.path(dirname(first), paste0("batch_masked_", stamp, "_report.txt"))
   } else {
     sub("\\.[^.]+$", "_report.txt", out_paths[1])
   }
-  existing <- c(out_paths, report_path)[file.exists(c(out_paths, report_path))]
+  existing <- c(out_paths, report_path)
+  existing <- existing[file.exists(existing)]
   if (!overwrite && length(existing)) {
     stop("Output already exists: ", paste(existing, collapse = ", "),
          "\nUse overwrite = TRUE to replace it.")
   }
-  same <- normalizePath(out_paths, mustWork = FALSE) == normalizePath(paths)
+  same <- normalizePath(out_paths, mustWork = FALSE) == normalizePath(masked_files)
   if (any(same)) stop("The output must be a different file from the original.")
   # A key is never overwritten: that would make earlier masked files
   # impossible to re-identify.
@@ -221,44 +251,82 @@ mask_survey <- function(file = NULL, columns = NULL, ip = NULL, latlon = NULL,
   results <- list()
   for (i in seq_along(paths)) {
     p <- paths[i]
-    if (batch) say(sprintf("Masking %s (%d of %d)...", basename(p), i, length(paths)))
+    if (multi) say(sprintf("Masking %s (%d of %d)...", unit_label(p), i, length(paths)))
     results[[p]] <- mask_one(files[[p]], cols[[p]], cb,
                              if (p %in% names(latlon_of)) latlon_of[[p]],
                              if (p %in% names(ip_of)) ip_of[[p]],
                              ip_cols[[p]], db, scan_text, mask_text, originals)
-    if (batch) say(" done,", length(cols[[p]]), "column(s)\n")
+    if (multi) say(" done,", length(cols[[p]]), "column(s)\n")
+  }
+  # In the guided mode, identifiers found inside other columns are shown
+  # before anything is saved, and the user decides whether to replace them.
+  found <- Filter(function(r) !is.null(r$text_found) && nrow(r$text_found) > 0, results)
+  if (guided && missing(mask_text) && length(found)) {
+    mask_text <- choose_mask_text(found, multi)
+    if (mask_text) {
+      for (p in names(found)) results[[p]] <- mask_found_text(results[[p]], cb, originals)
+    }
   }
 
   # 6. Writing
-  for (p in paths) {
-    x <- files[[p]]
-    x$data <- results[[p]]$data
-    write_survey(x, out_paths[[p]])
+  # The sheets of an Excel file are written together, the ones not masked
+  # unchanged.
+  for (f in masked_files) {
+    parts <- names(files)[unit_file(names(files)) == f]
+    sheets <- lapply(parts, function(u) {
+      x <- files[[u]]
+      if (u %in% names(results)) x$data <- results[[u]]$data
+      x
+    })
+    if (length(parts) > 1) write_workbook(sheets, out_paths[[f]]) else write_survey(sheets[[1]], out_paths[[f]])
   }
   if (new_key) {
     write_key_file(key$secret, key_file, created = key$created)
   }
-  add_key_use(key_file, basename(paths))
-  write_report(report_path, paths, out_paths, results, cols, key, new_key,
-               ip_of, latlon_of, mask_text, skipped)
+  add_key_use(key_file, basename(masked_files))
+  write_report(report_path, files, paths, out_paths, results, cols, key, new_key,
+               ip_of, latlon_of, mask_text, skipped, timestamp)
+  timestamped <- FALSE
+  if (timestamp) {
+    say("Getting a timestamp of the report...")
+    service <- stamp_file(report_path)
+    if (is.null(service)) {
+      # Nothing was stamped yet, so the report can still say so.
+      lines <- readLines(report_path)
+      lines[grepl("^Timestamp:", lines)] <-
+        "Timestamp:       not obtained (no internet connection, or the services did not answer)"
+      writeLines(lines, report_path)
+      say(" failed\n")
+      tell("Note: no timestamp could be obtained (no internet connection, or the services did ",
+           "not answer). Everything else was saved.")
+    } else {
+      timestamped <- TRUE
+      say(" done (", service, ")\n", sep = "")
+    }
+  }
 
   # 7. Summary
   if (batch) {
     say("\n")
     for (p in names(results)) {
-      for (note in results[[p]]$notes) tell("Note: ", basename(p), ": ", note)
+      for (note in results[[p]]$notes) tell("Note: ", unit_label(p), ": ", note)
     }
-    if (length(skipped)) tell("Not masked (no identifier columns): ", paste(basename(skipped), collapse = ", "))
+    if (length(skipped)) tell("Not masked (no identifier columns): ", paste(unit_label(skipped), collapse = ", "))
     say("\nMasked files:\n", paste0("  ", basename(out_paths), "\n"), sep = "")
-    say("Report: ", basename(report_path), "\n", sep = "")
+    say("Report: ", basename(report_path), if (timestamped) " (timestamped)", "\n", sep = "")
     say("Key:    ", basename(key_file), if (new_key) " (new" else " (reused", ", created ", key$created, ")\n", sep = "")
     say("Folder: ", dirname(report_path), "\n", sep = "")
   } else {
-    r <- results[[1]]
-    say("\nMasked", length(cols[[1]]), "column(s):", paste(cols[[1]], collapse = ", "), "\n")
-    for (note in r$notes) tell("Note: ", note)
-    if (!quiet && !is.null(r$text_found) && nrow(r$text_found)) print(r$text_found, row.names = FALSE)
-    say("Masked file: ", out_paths[[1]], "\nReport:      ", report_path, "\n", sep = "")
+    for (p in names(results)) {
+      r <- results[[p]]
+      say(paste0("\n", if (multi) paste0(unit_label(p), ": "), "Masked"), length(cols[[p]]), "column(s):",
+          paste(cols[[p]], collapse = ", "), "\n")
+      for (note in r$notes) tell("Note: ", note)
+      if (!is.null(r$text_found) && nrow(r$text_found)) say(paste0(found_lines(r$text_found), "\n"), sep = "")
+    }
+    if (length(skipped)) tell("Not masked: ", paste(unit_label(skipped), collapse = ", "))
+    say("Masked file: ", out_paths[[1]], "\nReport:      ", report_path,
+        if (timestamped) " (timestamped)", "\n", sep = "")
     say("Key:         ", key_file, if (new_key) " (new)" else " (reused)", "\n", sep = "")
   }
   if (new_key) {
@@ -270,14 +338,18 @@ mask_survey <- function(file = NULL, columns = NULL, ip = NULL, latlon = NULL,
   }, logical(1))
   say("\nTo repeat this masking in one line:\n",
       repeat_command(paths, cols, suggested, ip_of, latlon_of,
-                     ip_db, key_file, mask_text), "\n", sep = "")
+                     ip_db, key_file, mask_text, timestamp), "\n", sep = "")
 
   data_out <- lapply(results, `[[`, "data")
   if (batch) {
-    invisible(list(data = data_out, output = out_paths, report = report_path, key_file = key_file))
+    invisible(list(data = data_out, output = out_paths, report = report_path,
+                   key_file = key_file, timestamped = timestamped))
+  } else if (multi) {
+    invisible(list(data = data_out, output = unname(out_paths), report = report_path,
+                   key_file = key_file, timestamped = timestamped))
   } else {
     invisible(list(data = data_out[[1]], output = unname(out_paths), report = report_path,
-                   key_file = key_file))
+                   key_file = key_file, timestamped = timestamped))
   }
 }
 
@@ -333,17 +405,10 @@ mask_one <- function(x, columns, cb, latlon, ip, ip_cols, db, scan_text,
   text_found <- NULL
   if (scan_text) {
     others <- setdiff(names(data), columns)
-    text_found <- scan_text(data, others, known_ids = originals)
-    if (nrow(text_found)) {
-      if (mask_text) {
-        for (col in unique(text_found$column)) {
-          data[[col]] <- replace_column(data[[col]], mask_in_text(data[[col]], cb, originals))
-        }
-        notes <- c(notes, "Identifiers found inside other columns were replaced with their codes (see the report).")
-      } else {
-        notes <- c(notes, "Possible identifiers were found inside other columns (see the report). Check them, or rerun with mask_text = TRUE.")
-      }
-    }
+    # Row numbers as in the file, below its header rows.
+    text_found <- find_text_ids(data, others, known_ids = originals,
+                                first_row = NROW(x$header) + 1L)
+    if (nrow(text_found)) notes <- c(notes, text_note_found)
   }
 
   if (x$format == "sav") {
@@ -352,8 +417,23 @@ mask_one <- function(x, columns, cb, latlon, ip, ip_cols, db, scan_text,
       "%d SPSS variable label(s) longer than 256 characters were shortened (an SPSS file limit): %s.",
       sum(long), paste(names(data)[long], collapse = ", ")))
   }
-  list(data = data, notes = notes, text_found = text_found, rows = nrow(data),
-       original = x$data[columns])
+  out <- list(data = data, notes = notes, text_found = text_found, rows = nrow(data),
+              original = x$data[columns])
+  if (mask_text && !is.null(text_found) && nrow(text_found)) out <- mask_found_text(out, cb, originals)
+  out
+}
+
+text_note_found <- "Possible identifiers were found inside other columns (see the report). Check them, or rerun with mask_text = TRUE."
+text_note_masked <- "Identifiers found inside other columns were replaced with their codes (see the report)."
+
+# Replaces the identifiers found inside other columns of a masked file (a
+# result of mask_one()) with their codes.
+mask_found_text <- function(r, cb, originals) {
+  for (col in unique(r$text_found$column)) {
+    r$data[[col]] <- replace_column(r$data[[col]], mask_in_text(r$data[[col]], cb, originals))
+  }
+  r$notes[r$notes == text_note_found] <- text_note_masked
+  r
 }
 
 # How IPs or locations are masked in each file they apply to: a named
@@ -373,10 +453,11 @@ modes_by_file <- function(value, applies, paths, name) {
     out[] <- check(value[[1]])
     return(out)
   }
-  bad <- setdiff(names(value), c(paths, basename(paths)))
+  names(value) <- slash_path(names(value))
+  bad <- setdiff(names(value), unlist(lapply(paths, part_names)))
   if (length(bad)) stop("`", name, "` names a file that is not being masked: ", paste(bad, collapse = ", "), call. = FALSE)
   for (p in applies) {
-    hit <- intersect(c(p, basename(p)), names(value))
+    hit <- intersect(part_names(p), names(value))
     if (length(hit)) out[[p]] <- check(value[[hit[1]]])
   }
   out
@@ -386,13 +467,13 @@ modes_by_file <- function(value, applies, paths, name) {
 choose_files <- function(header_rows) {
   files <- list()
   for (f in unique(normalizePath(pick_files(), mustWork = FALSE))) {
-    x <- tryCatch(read_survey(f, header_rows), error = function(e) {
+    units <- tryCatch(read_units(f, header_rows), error = function(e) {
       cat("Could not read ", basename(f), ": ", conditionMessage(e), "\n", sep = "")
       NULL
     })
-    if (is.null(x)) next
-    cat(sprintf("Read %s: %d rows, %d columns.\n", basename(f), nrow(x$data), ncol(x$data)))
-    files[[f]] <- x
+    if (is.null(units)) next
+    cat("Read ", units_summary(units), ".\n", sep = "")
+    files <- c(files, units)
   }
   if (!length(files)) stop("None of the chosen files could be read.", call. = FALSE)
   files
@@ -479,13 +560,24 @@ survey_files <- function(dir) {
 # its own columns.
 columns_for <- function(columns, path, paths) {
   if (!is.list(columns)) return(columns)
-  hit <- intersect(c(path, basename(path)), names(columns))
-  if (!length(hit)) stop("`columns` has no entry for ", basename(path), call. = FALSE)
-  if (sum(basename(paths) == basename(path)) > 1 && !path %in% names(columns)) {
+  names(columns) <- slash_path(names(columns))
+  hit <- intersect(part_names(path), names(columns))
+  if (!length(hit)) {
+    # A sheet left out of the list is not masked.
+    if (unit_file(path) != path) return(character())
+    stop("`columns` has no entry for ", basename(path), call. = FALSE)
+  }
+  if (sum(basename(paths) == basename(path)) > 1 && !slash_path(path) %in% names(columns)) {
     stop("Several files are called ", basename(path), ": name them by full path in `columns`.", call. = FALSE)
   }
   columns[[hit[1]]]
 }
+
+# The names a part can be given by in a list (`columns`, `ip`, `latlon`): the
+# part itself ("study.xlsx [Data]", with or without its folder), then its file.
+# Folders are compared with forward slashes, so "C:/data/a.csv" and
+# "C:\\data\\a.csv" are the same file.
+part_names <- function(part) slash_path(unique(c(part, basename(part), unit_file(part), basename(unit_file(part)))))
 
 # With several files a file without the given columns, or without suggested
 # ones, is left out (and listed in the report) instead of stopping everything.
@@ -594,8 +686,10 @@ format_columns <- function(labels) {
   vapply(rows, paste, character(1), collapse = "")
 }
 
-write_report <- function(path, inputs, outputs, results, cols, key, new_key,
-                         ip_of, latlon_of, mask_text, skipped) {
+# `files` holds every part read (files, or sheets of Excel files), `inputs` the
+# parts masked, and `outputs` the masked files, named by original file.
+write_report <- function(path, files, inputs, outputs, results, cols, key, new_key,
+                         ip_of, latlon_of, mask_text, skipped, timestamp = FALSE) {
   mode_label <- function(m) if (identical(m, "country_state")) "country/US state kept" else "full"
   # One line in the header when every file uses the same rule; otherwise the
   # rule is given for each file.
@@ -603,10 +697,12 @@ write_report <- function(path, inputs, outputs, results, cols, key, new_key,
   same_loc <- length(unique(latlon_of)) <= 1
   ip <- if (length(ip_of) && same_ip) ip_of[[1]]
   latlon <- if (length(latlon_of) && same_loc) latlon_of[[1]]
-  batch <- length(inputs) > 1 || length(skipped)
-  key_line <- if (length(inputs) > 1) {
+  masked_files <- names(outputs)
+  skipped_files <- setdiff(unique(unit_file(names(files))), masked_files)
+  batch <- length(masked_files) > 1 || length(skipped_files)
+  key_line <- if (length(masked_files) > 1) {
     sprintf("Key:             one key for all %d files, created %s (%s)",
-            length(inputs), key$created, if (new_key) "new" else "existing key")
+            length(masked_files), key$created, if (new_key) "new" else "existing key")
   } else {
     sprintf("Key:             created %s (%s)", key$created, if (new_key) "new" else "existing key")
   }
@@ -621,41 +717,59 @@ write_report <- function(path, inputs, outputs, results, cols, key, new_key,
     if (!is.null(latlon)) paste("Locations:      ", mode_label(latlon), "(latitude/longitude)"),
     if (!same_loc) "Locations:       differ by file (see each file)",
     "Codes:           encrypted with a private key kept in a separate file",
-    "Blank values:    MSKblank"
+    "Blank values:    MSKblank",
+    if (timestamp) "Timestamp:       at the end of this report"
   )
-  for (i in seq_along(inputs)) {
-    p <- inputs[i]
-    r <- results[[p]]
+  for (i in seq_along(masked_files)) {
+    f <- masked_files[i]
     pad <- if (batch) "   " else ""
     lines <- c(lines, "",
-      if (batch) sprintf("%d. %s -> %s", i, basename(p), basename(outputs[[p]])) else
-        c(paste("Original file:  ", basename(p)), paste("Masked file:    ", basename(outputs[[p]]))),
-      paste0(pad, "Rows: ", r$rows),
-      paste0(pad, "Masked columns: ", paste(cols[[p]], collapse = ", ")),
-      if (!same_ip && p %in% names(ip_of)) paste0(pad, "IP addresses: ", mode_label(ip_of[[p]])),
-      if (!same_loc && p %in% names(latlon_of)) paste0(pad, "Locations: ", mode_label(latlon_of[[p]]), " (latitude/longitude)"))
-    if (length(r$notes)) lines <- c(lines, paste0(pad, "Note: ", r$notes))
-    tf <- r$text_found
-    if (!is.null(tf) && nrow(tf)) {
-      lines <- c(lines, sprintf("%sPossible identifiers in other columns (%s):", pad,
-                                if (mask_text) "masked" else "NOT masked"),
-                 sprintf("%s  %-30s %-18s %d cell(s)", pad, tf$column, tf$type, tf$cells))
+      if (batch) sprintf("%d. %s -> %s", i, basename(f), basename(outputs[[f]])) else
+        c(paste("Original file:  ", basename(f)), paste("Masked file:    ", basename(outputs[[f]]))))
+    parts <- names(files)[unit_file(names(files)) == f]
+    sheets <- length(parts) > 1
+    if (sheets) {
+      names_of <- vapply(parts, function(u) files[[u]]$sheet, character(1))
+      lines <- c(lines, sprintf("%sSheets: %d (%s)", pad, length(parts), paste(names_of, collapse = ", ")))
+    }
+    for (p in parts) {
+      spad <- if (sheets) paste0(pad, "  ") else pad
+      if (sheets) {
+        lines <- c(lines, paste0(pad, "Sheet \"", files[[p]]$sheet, "\"",
+          if (!p %in% inputs) { if (ncol(files[[p]]$data)) ": not masked (no columns to mask)" else ": empty" }))
+      }
+      if (!p %in% inputs) next
+      r <- results[[p]]
+      lines <- c(lines,
+        paste0(spad, "Rows: ", r$rows),
+        paste0(spad, "Masked columns: ", paste(cols[[p]], collapse = ", ")),
+        if (!same_ip && p %in% names(ip_of)) paste0(spad, "IP addresses: ", mode_label(ip_of[[p]])),
+        if (!same_loc && p %in% names(latlon_of)) paste0(spad, "Locations: ", mode_label(latlon_of[[p]]), " (latitude/longitude)"))
+      if (length(r$notes)) lines <- c(lines, paste0(spad, "Note: ", r$notes))
+      tf <- r$text_found
+      if (!is.null(tf) && nrow(tf)) {
+        lines <- c(lines, sprintf("%sPossible identifiers in other columns (%s):", spad,
+                                  if (mask_text) "masked" else "NOT masked"),
+                   found_lines(tf, spad))
+      }
     }
     lines <- c(lines, paste0(pad, "SHA-256 of masked file: ",
-                             digest::digest(file = outputs[[p]], algo = "sha256")))
+                             digest::digest(file = outputs[[f]], algo = "sha256")))
   }
-  if (length(skipped)) {
-    lines <- c(lines, "", "Not masked (no identifier columns):", paste0("  ", basename(skipped)))
+  if (length(skipped_files)) {
+    lines <- c(lines, "", "Not masked (no identifier columns):", paste0("  ", basename(skipped_files)))
   }
-  sentence <- methods_sentence(inputs, results, cols, ip_of, latlon_of)
+  sentence <- methods_sentence(inputs, results, cols, ip_of, latlon_of, length(masked_files))
   lines <- c(lines, "", "For the methods section or README (edit as needed):",
-             paste0("  ", strwrap(sentence, 76)), "", "Reference:", paste0("  ", strwrap(citation_text(), 76)))
+             paste0("  ", strwrap(sentence, 76)), "", "Reference:", paste0("  ", strwrap(citation_text(), 76)),
+             # A blank line before the timestamp added at the end.
+             if (timestamp) "")
   writeLines(lines, path)
 }
 
 # A sentence describing the masking, ready to paste into a paper or a
 # replication package README.
-methods_sentence <- function(inputs, results, cols, ip_of, latlon_of) {
+methods_sentence <- function(inputs, results, cols, ip_of, latlon_of, n = length(inputs)) {
   kinds <- unique(unlist(lapply(inputs, function(p) {
     vapply(cols[[p]], function(col) column_kind(col, results[[p]]$original[[col]]), character(1))
   })))
@@ -663,7 +777,6 @@ methods_sentence <- function(inputs, results, cols, ip_of, latlon_of) {
   what <- if (length(kinds) > 1) {
     paste0(paste(kinds[-length(kinds)], collapse = ", "), " and ", kinds[length(kinds)])
   } else kinds
-  n <- length(inputs)
   what <- if (identical(kinds, "other identifiers")) "" else paste0(" (", what, ")")
   s <- sprintf(paste0("Participant identifiers%s were replaced with codes encrypted with a private key, ",
                       "using surveyIDmasker %s (Zanibellato, 2026); the same identifier received the same code%s."),
@@ -707,27 +820,38 @@ column_kind <- function(col, values) {
 #' `(empty)`.
 #'
 #' @param file Path to a survey data file (.csv, .sav, .dta or .xlsx).
+#' @param sheet For Excel files, the sheet (name or number). The first one by
+#'   default.
 #' @return Invisibly, a data frame with `number`, `column`, `suggested` and
 #'   `empty`.
 #' @examples
 #' example <- system.file("extdata", "example_survey.csv", package = "surveyIDmasker")
 #' list_columns(example)
 #' @export
-list_columns <- function(file) {
-  data <- read_survey(file)$data
+list_columns <- function(file, sheet = 1) {
+  x <- read_survey(file, sheet = sheet)
+  data <- x$data
+  if (tolower(tools::file_ext(file)) == "xlsx" && length(readxl::excel_sheets(file)) > 1) {
+    cat("Sheet \"", x$sheet, "\" (other sheets: list_columns(file, sheet = ...)):\n", sep = "")
+  }
   found <- suggest_id_columns(data, include_empty = TRUE)
   empty <- found$column[found$empty]
   out <- data.frame(number = seq_along(data), column = names(data),
                     suggested = names(data) %in% found$column[!found$empty],
                     empty = names(data) %in% empty)
-  cat(format_columns(column_labels(out$column, found$column[!found$empty], empty)), sep = "\n")
+  if (ncol(data)) cat(format_columns(column_labels(out$column, found$column[!found$empty], empty)), sep = "\n")
   invisible(out)
 }
 
 resolve_columns <- function(data, columns) {
   if (identical(columns, "suggested")) {
     columns <- suggest_id_columns(data)$column
-    if (!length(columns)) stop("No identifier columns were found. Give them with `columns =`.")
+    if (!length(columns)) {
+      if (any(vapply(data, is_masked_column, logical(1)))) {
+        stop("This file is already masked: no other identifier columns were found.", call. = FALSE)
+      }
+      stop("No identifier columns were found. Give them with `columns =`.")
+    }
     return(columns)
   }
   if (is.numeric(columns)) {
@@ -777,6 +901,42 @@ ask_line <- function(prompt) {
   ans
 }
 
+# One line per finding of find_text_ids(), e.g.
+#   comment                      Prolific ID        2 cell(s): rows 4, 9
+found_lines <- function(tf, pad = "") {
+  sprintf("%s  %-28s %-18s %d cell(s): %s", pad, tf$column, tf$type, tf$cells, row_text(tf$rows))
+}
+
+# Lists the identifiers found inside other columns and asks whether to replace
+# them. `found` holds the results of mask_one() that have any, named by file.
+choose_mask_text <- function(found, batch) {
+  cat("\nFound in other columns, before saving:\n")
+  for (p in names(found)) {
+    tf <- found[[p]]$text_found
+    if (batch) cat("  ", basename(p), "\n", sep = "")
+    cat(paste0(found_lines(tf, if (batch) "  " else ""), "\n"), sep = "")
+  }
+  repeat {
+    ans <- tolower(ask_line("Replace these with their codes? [Y/n, or q to exit] "))
+    if (ans %in% c("", "y", "yes")) return(TRUE)
+    if (ans %in% c("n", "no")) return(FALSE)
+    cat("Please type y or n (or q to exit).\n")
+  }
+}
+
+# interactive(), as a function of the package so that tests can replace it.
+is_interactive <- function() interactive()
+
+choose_timestamp <- function() {
+  cat("\nGet an independent timestamp for your report? (needs an internet connection).\n")
+  repeat {
+    ans <- tolower(ask_line("[Y/n, or q to exit] "))
+    if (ans %in% c("", "y", "yes")) return(TRUE)
+    if (ans %in% c("n", "no")) return(FALSE)
+    cat("Please type y or n (or q to exit).\n")
+  }
+}
+
 ask_choice <- function(title, options) {
   cat("\n", title, "\n\n", sep = "")
   cat(sprintf("%d: %s\n", seq_along(options), options), sep = "")
@@ -793,19 +953,23 @@ unknown_note <- function(region, values, what) {
   sprintf("%s: %d value(s) could not be matched to a country and got a plain MSK code.", what, n)
 }
 
-repeat_command <- function(paths, cols, suggested, ip_of, latlon_of, ip_db, key_file, mask_text) {
-  q <- function(x) paste0('"', gsub('"', '\\\\"', x), '"')
+repeat_command <- function(paths, cols, suggested, ip_of, latlon_of, ip_db, key_file, mask_text,
+                           timestamp = FALSE) {
+  # Paths are written with forward slashes, which R reads on every system
+  # (Windows paths with backslashes would not run when pasted).
+  q <- r_string
   vec <- function(x) if (length(x) == 1) q(x) else paste0("c(", paste(q(x), collapse = ", "), ")")
   one_col <- function(p) if (suggested[[p]]) q("suggested") else vec(cols[[p]])
+  files <- slash_path(unique(unit_file(paths)))
+  file_arg <- if (length(files) == 1) q(files) else paste0("c(", paste(q(files), collapse = ",\n    "), ")")
   if (length(paths) == 1) {
-    file_arg <- q(paths)
     col_arg <- paste0("columns = ", if (suggested[[1]]) q("suggested") else vec(cols[[1]]))
   } else {
-    file_arg <- paste0("c(", paste(q(paths), collapse = ",\n    "), ")")
     col_arg <- if (all(suggested)) {
       'columns = "suggested"'
     } else {
-      nm <- if (anyDuplicated(basename(paths))) paths else basename(paths)
+      sp <- slash_path(paths)
+      nm <- if (anyDuplicated(basename(sp))) sp else basename(sp)
       paste0("columns = list(\n      ",
              paste(paste0(q(nm), " = ", vapply(paths, one_col, character(1))), collapse = ",\n      "),
              ")")
@@ -814,17 +978,24 @@ repeat_command <- function(paths, cols, suggested, ip_of, latlon_of, ip_db, key_
   args <- c(file_arg, col_arg,
             mode_arg("ip", ip_of),
             mode_arg("latlon", latlon_of),
-            if (!is.null(ip_db)) paste0("ip_db = ", q(ip_db)),
-            paste0("key_file = ", q(key_file)),
-            if (mask_text) "mask_text = TRUE")
+            if (!is.null(ip_db)) paste0("ip_db = ", q(slash_path(ip_db))),
+            paste0("key_file = ", q(slash_path(key_file))),
+            if (mask_text) "mask_text = TRUE",
+            if (timestamp) "timestamp = TRUE")
   paste0("mask_survey(", paste(args, collapse = ",\n  "), ")")
 }
+
+# A string written as R code: backslashes and quotes escaped.
+r_string <- function(x) paste0('"', gsub('"', '\\\\"', gsub("\\\\", "\\\\\\\\", x)), '"')
+
+slash_path <- function(x) if (length(x)) gsub("\\\\", "/", x) else x
 
 # `ip = "full"` when every file uses the same rule, otherwise a list by file.
 mode_arg <- function(name, modes) {
   if (!length(modes)) return(NULL)
-  q <- function(x) paste0('"', x, '"')
+  q <- r_string
   if (length(unique(modes)) == 1) return(paste0(name, " = ", q(modes[[1]])))
-  nm <- if (anyDuplicated(basename(names(modes)))) names(modes) else basename(names(modes))
+  sp <- slash_path(names(modes))
+  nm <- if (anyDuplicated(basename(sp))) sp else basename(sp)
   paste0(name, " = list(", paste(paste0(q(nm), " = ", q(modes)), collapse = ", "), ")")
 }

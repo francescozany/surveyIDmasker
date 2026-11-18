@@ -19,7 +19,8 @@
 #' @param quiet Do not print what was done.
 #' @return Invisibly, a list with the re-identified `data` and the `output`
 #'   path. With several files, `data` is a list and `output` a vector, both
-#'   named by file.
+#'   named by file. For an Excel file with several sheets, `data` is a list
+#'   named by sheet.
 #' @examples
 #' # A small made-up Qualtrics export that comes with the package,
 #' # copied to a temporary folder
@@ -54,8 +55,8 @@ reidentify <- function(file, key_file, output = NULL, overwrite = FALSE,
 }
 
 reidentify_one <- function(file, key, output, overwrite, header_rows, quiet = FALSE) {
-  x <- read_survey(file, header_rows)
-  data <- x$data
+  # Every sheet of an Excel file.
+  units <- read_units(file, header_rows)
 
   # "study_masked_2026-10-23_14-53.csv" -> "study_reidentified_<now>.csv"
   base <- sub("_masked(_\\d{4}-\\d{2}-\\d{2}_\\d{2}-\\d{2})?(\\.[^.]+)$", "\\2", file)
@@ -67,42 +68,46 @@ reidentify_one <- function(file, key, output, overwrite, header_rows, quiet = FA
     stop("The output must be a different file from the masked one.")
   }
 
-  token_re <- "(?<![A-Za-z0-9_-])MSK(?:[A-Z]{2}(?:-[A-Z0-9]{1,3})?_)?[A-Za-z0-9]{10,}(?![A-Za-z0-9_-])"
+  # A code can follow or precede a "-" when it replaced an ID inside text.
+  token_re <- "(?<![A-Za-z0-9_])MSK(?:[A-Z]{2}(?:-[A-Z0-9]{1,3})?_)?[A-Za-z0-9]{10,}(?![A-Za-z0-9_])"
   decoded <- character()   # token -> original value (NA: not made with this key)
   restored <- 0
   unknown <- 0
   changed <- character()
-  for (col in names(data)) {
-    v <- data[[col]]
-    if (!is.character(v)) next
-    has_code <- !is.na(v) & grepl("MSK", v, fixed = TRUE)
-    if (!any(has_code)) next
-    new <- v
-    new[has_code & v == "MSKblank"] <- ""
-    todo <- has_code & v != "MSKblank"
-    m <- gregexpr(token_re, new[todo], perl = TRUE)
-    found <- regmatches(new[todo], m)
-    tokens <- unlist(found)
-    fresh <- setdiff(unique(tokens), names(decoded))
-    if (length(fresh)) decoded <- c(decoded, stats::setNames(decode_tokens(fresh, key), fresh))
-    vals <- unname(decoded[tokens])
-    restored <- restored + sum(!is.na(vals))
-    unknown <- unknown + sum(is.na(vals))
-    vals[is.na(vals)] <- tokens[is.na(vals)]
-    regmatches(new[todo], m) <- unname(split(vals, factor(rep(seq_along(found), lengths(found)),
-                                                          levels = seq_along(found))))
-    if (!identical(new, v)) {
-      data[[col]] <- replace_column(v, new)
-      changed <- c(changed, col)
+  for (u in names(units)) {
+    data <- units[[u]]$data
+    for (col in names(data)) {
+      v <- data[[col]]
+      if (!is.character(v)) next
+      has_code <- !is.na(v) & grepl("MSK", v, fixed = TRUE)
+      if (!any(has_code)) next
+      new <- v
+      new[has_code & v == "MSKblank"] <- ""
+      todo <- has_code & v != "MSKblank"
+      m <- gregexpr(token_re, new[todo], perl = TRUE)
+      found <- regmatches(new[todo], m)
+      tokens <- unlist(found)
+      fresh <- setdiff(unique(tokens), names(decoded))
+      if (length(fresh)) decoded <- c(decoded, stats::setNames(decode_tokens(fresh, key), fresh))
+      vals <- unname(decoded[tokens])
+      restored <- restored + sum(!is.na(vals))
+      unknown <- unknown + sum(is.na(vals))
+      vals[is.na(vals)] <- tokens[is.na(vals)]
+      regmatches(new[todo], m) <- unname(split(vals, factor(rep(seq_along(found), lengths(found)),
+                                                            levels = seq_along(found))))
+      if (!identical(new, v)) {
+        data[[col]] <- replace_column(v, new)
+        changed <- c(changed, if (length(units) > 1) paste0(units[[u]]$sheet, ": ", col) else col)
+      }
     }
+    units[[u]]$data <- data
   }
   if (restored == 0 && unknown > 0) {
     stop("None of the codes in ", basename(file), " match this key (created ", key$created,
          "). The report of the masked file says when its key was created.", call. = FALSE)
   }
 
-  x$data <- data
-  write_survey(x, out_path)
+  if (length(units) > 1) write_workbook(units, out_path) else write_survey(units[[1]], out_path)
   if (!quiet) cat(sprintf("Restored %d value(s) in %d column(s): %s\n", restored, length(changed),
               paste(changed, collapse = ", ")))
   if (unknown && !quiet) message("Note: ", unknown, " code(s) were not made with this key and were left unchanged.")
@@ -110,7 +115,9 @@ reidentify_one <- function(file, key, output, overwrite, header_rows, quiet = FA
     cat("Re-identified file: ", out_path, "\n", sep = "")
     message("This file contains identifiers again: keep it private.")
   }
-  invisible(list(data = data, output = out_path))
+  data <- lapply(units, `[[`, "data")
+  invisible(list(data = if (length(units) > 1) stats::setNames(data, vapply(units, `[[`, "", "sheet")) else data[[1]],
+                 output = out_path))
 }
 
 # A token is "MSK" + optional region and "_" (e.g. "MSKIT_", "MSKUS-CT_") +

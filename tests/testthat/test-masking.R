@@ -1,17 +1,3 @@
-fake_export <- function(dir) {
-  path <- file.path(dir, "study.csv")
-  lines <- c(
-    "StartDate,IPAddress,LocationLatitude,LocationLongitude,PROLIFIC_PID,participantId,comment",
-    "Start Date,IP Address,Location Latitude,Location Longitude,PROLIFIC_PID,participantId,Any comments?",
-    '"{""ImportId"":""startDate""}","{""ImportId"":""ipAddress""}","{""ImportId"":""locationLatitude""}","{""ImportId"":""locationLongitude""}","{""ImportId"":""PROLIFIC_PID""}","{""ImportId"":""participantId""}","{""ImportId"":""QID1_TEXT""}"',
-    "2026-01-01 10:00:00,1.2.3.4,41.3083,-72.9279,5f1a2b3c4d5e6f7a8b9c0d1e,5f1a2b3c4d5e6f7a8b9c0d1e,my id is 5f1a2b3c4d5e6f7a8b9c0d1e",
-    "2026-01-01 11:00:00,5.6.7.8,41.9028,12.4964,aaaaaaaaaaaaaaaaaaaaaaaa,,nice study",
-    "2026-01-01 12:00:00,1.2.3.4,41.3083,-72.9279,5f1a2b3c4d5e6f7a8b9c0d1e,5f1a2b3c4d5e6f7a8b9c0d1e,"
-  )
-  writeLines(lines, path)
-  path
-}
-
 test_that("codes have the right form and repeat for equal values", {
   m <- mask_values(c("A1B2C3", "", NA, "A1B2C3", " A1B2C3 ", "XYZ"))
   expect_match(m[c(1, 4, 6)], "^MSK[A-Za-z0-9]{12,}$")
@@ -433,12 +419,42 @@ test_that("location and contact columns are suggested, flags and countries are n
   expect_equal(suggest_id_columns(d)$column, c("zip", "city", "region", "areacode", "phone"))
 })
 
+test_that("columns already masked are not suggested again", {
+  dir <- withr_tempdir()
+  res <- mask_survey(fake_export(dir), columns = "suggested", ip = "full", latlon = "full", quiet = TRUE)
+  expect_equal(nrow(suggest_id_columns(read_survey(res$output)$data)), 0)
+  expect_error(mask_survey(res$output, columns = "suggested", key_file = res$key_file, quiet = TRUE),
+               "already masked")
+})
+
+test_that("the end of a random ID in a file name is not a worker ID", {
+  d <- data.frame(pic = c("1ABC23D4-56E7-8F90-A123-A4BC56789012.jpg", "worker A1B2C3D4E5F6G7"),
+                  stringsAsFactors = FALSE)
+  found <- scan_text(d)
+  expect_equal(found$type, "MTurk worker ID")
+  expect_equal(found$rows, "2")
+})
+
+test_that("codes next to a dash inside text are restored by the key", {
+  dir <- withr_tempdir()
+  path <- file.path(dir, "s.csv")
+  writeLines(c("pid,note", "A1B2C3D4E5F6G7,img-A1B2C3D4E5F6G7-v2.jpg"), path)
+  res <- mask_survey(path, columns = "pid", mask_text = TRUE, quiet = TRUE)
+  expect_false(grepl("A1B2C3D4E5F6G7", read_survey(res$output)$data$note))
+  back <- reidentify(res$output, res$key_file, quiet = TRUE)
+  expect_equal(back$data$note, "img-A1B2C3D4E5F6G7-v2.jpg")
+})
+
 test_that("phone numbers are found and masked in free text", {
   d <- data.frame(comment = c("call me at (203) 555-0147", "我的手机 13812345678",
                               "I scored 2035550147 points", "fine"), stringsAsFactors = FALSE)
   found <- scan_text(d)
   expect_equal(found$type, "phone number")
   expect_equal(found$cells, 2)
+  expect_equal(found$rows, "1, 2")
+  expect_equal(find_text_ids(d, first_row = 4)$rows, "4, 5")
+  expect_equal(row_text(c("7", "1, 2", paste(1:12, collapse = ", "))),
+               c("row 7", "rows 1, 2", "rows 1, 2, 3, 4, 5, 6, 7, 8, 9, 10 and 2 more"))
   cb <- new_codebook(derive_key(openssl::rand_bytes(32)))
   out <- mask_in_text(d$comment, cb)
   expect_match(out[1], "^call me at MSK[A-Za-z0-9]+$")
@@ -545,4 +561,54 @@ test_that("an empty file gives a clear error", {
   path <- file.path(dir, "empty.csv")
   file.create(path)
   expect_error(read_survey(path), "empty.csv is empty")
+})
+
+test_that("the guided mode shows identifiers found in other columns before saving and asks", {
+  guided_run <- function(answers) {
+    local_mocked_bindings(
+      is_interactive = function() TRUE,
+      ask_line = function(prompt) {
+        a <- answers[1]
+        answers <<- answers[-1]
+        a
+      })
+    dir <- withr_tempdir()
+    out <- capture.output(res <- mask_survey(fake_export(dir), ip = "full", latlon = "full"))
+    list(res = res, out = out, left = answers)
+  }
+  # Columns: Enter; timestamp: n; replace in text: Enter (yes)
+  run <- guided_run(c("", "n", ""))
+  expect_length(run$left, 0)
+  expect_true(any(grepl("Found in other columns, before saving", run$out)))
+  # Rows as in the file: the first response is below the 3 header rows.
+  expect_true(any(grepl("comment +Prolific ID +1 cell\\(s\\): row 4$", run$out)))
+  expect_true(any(grepl("comment +Prolific ID +1 cell\\(s\\): row 4$", readLines(run$res$report))))
+  expect_false(any(grepl("5f1a2b3c4d5e6f7a8b9c0d1e", read_survey(run$res$output)$data$comment)))
+  expect_true(any(grepl("\\(masked\\)", readLines(run$res$report))))
+  expect_true(any(grepl("mask_text = TRUE", run$out)))
+  # The question comes before anything is written.
+  expect_lt(grep("before saving", run$out)[1], grep("^Masked file:", run$out)[1])
+
+  run <- guided_run(c("", "n", "n"))
+  expect_true(any(grepl("5f1a2b3c4d5e6f7a8b9c0d1e", read_survey(run$res$output)$data$comment)))
+  expect_true(any(grepl("NOT masked", readLines(run$res$report))))
+  expect_false(any(grepl("mask_text = TRUE", run$out)))
+})
+
+test_that("mask_text = TRUE and replacing after the question give the same file", {
+  dir <- withr_tempdir()
+  study <- fake_export(dir)
+  key <- file.path(dir, "k.txt")
+  new_key_file(key)
+  a <- mask_survey(study, columns = "suggested", ip = "full", latlon = "full", key_file = key,
+                   mask_text = TRUE, output = file.path(dir, "a.csv"), quiet = TRUE)
+  x <- read_survey(study)
+  cols <- suggest_id_columns(x$data)$column
+  cb <- new_codebook(read_key_file(key))
+  originals <- trimws(unlist(lapply(cols, function(col) id_text(x$data[[col]]))))
+  r <- mask_one(x, cols, cb, "full", "full", cols[vapply(cols, is_ip_column, logical(1), data = x$data)],
+                NULL, TRUE, FALSE, originals)
+  r <- mask_found_text(r, cb, originals)
+  expect_equal(r$data, a$data, ignore_attr = TRUE)
+  expect_true(any(grepl("were replaced", r$notes)))
 })

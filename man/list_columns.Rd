@@ -4,10 +4,13 @@
 \alias{list_columns}
 \title{List the columns of a survey file with their numbers}
 \usage{
-list_columns(file)
+list_columns(file, sheet = 1)
 }
 \arguments{
 \item{file}{Path to a survey data file (.csv, .sav, .dta or .xlsx).}
+
+\item{sheet}{For Excel files, the sheet (name or number). The first one by
+default.}
 }
 \value{
 Invisibly, a data frame with \code{number}, \code{column}, \code{suggested} and

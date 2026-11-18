@@ -14,8 +14,9 @@ scan_text(data, columns = names(data), known_ids = character())
 \item{known_ids}{Exact identifiers to look for.}
 }
 \value{
-A data frame with \code{column}, \code{type} and \code{cells} (number of cells
-with a match). No matched values are returned.
+A data frame with \code{column}, \code{type}, \code{cells} (number of cells
+with a match) and \code{rows} (the rows of \code{data} with a match). No matched
+values are returned.
 }
 \description{
 Scans text columns for strings that look like Prolific IDs, MTurk worker
