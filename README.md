@@ -101,7 +101,7 @@ mask_survey("my_study.sav",
                latlon  = "country_state")    # "full" or "country_state"
 ```
 
-After every run, the console prints the one-line command that repeats it.
+After every run, the console shows the one-line command that repeats it.
 
 ## Good to know
 
@@ -155,5 +155,5 @@ After every run, the console prints the one-line command that repeats it.
 ## Cite
 
 > Zanibellato, F. (2026). *surveyIDmasker: Mask participant identifiers in
-> survey exports* (Version 0.3.1). Zenodo.
+> survey exports* (Version 0.3.2). Zenodo.
 > https://doi.org/10.5281/zenodo.23599338

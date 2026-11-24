@@ -41,3 +41,17 @@ fake_workbook <- function(dir) {
   openxlsx::saveWorkbook(wb, path)
   path
 }
+
+# What a call writes to the console, printed text and messages, in order.
+capture_all <- function(code) {
+  out <- character()
+  con <- textConnection("out", "w", local = TRUE)
+  sink(con)
+  sink(con, type = "message")
+  tryCatch(force(code), finally = {
+    sink(type = "message")
+    sink()
+    close(con)
+  })
+  out
+}

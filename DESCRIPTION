@@ -1,6 +1,6 @@
 Package: surveyIDmasker
 Title: Mask Participant Identifiers in Survey Exports
-Version: 0.3.1.9000
+Version: 0.3.2
 Authors@R:
     person("Francesco", "Zanibellato", email = "fz150@georgetown.edu",
            role = c("aut", "cre", "cph"))
@@ -13,8 +13,12 @@ Description: Replaces participant identifiers in survey data files
     authors, who keep the key, can turn the codes back into the original
     identifiers. Locations and IP addresses can keep their country (and US
     state). Reads and writes CSV, 'SPSS' (.sav), 'Stata' (.dta) and 'Excel'
-    (.xlsx) files, such as exports from 'Qualtrics' or 'Credamo' and lab data
-    files, keeping header rows and variable labels.
+    (.xlsx) files, every sheet included, such as exports from 'Qualtrics' or
+    'Credamo' and lab data files, keeping header rows and variable labels.
+    Each run writes a report of what was masked, which can get a trusted
+    timestamp from a public timestamping service (RFC 3161 standard), so that
+    anyone can check with verify_report() that the report and the masked
+    files have not changed since.
 License: MIT + file LICENSE
 URL: https://github.com/francescozany/surveyIDmasker,
     https://doi.org/10.5281/zenodo.23599338

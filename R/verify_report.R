@@ -12,8 +12,10 @@
 #'   masked file that was only renamed is recognized by its content.
 #' @param header_rows Number of header rows in CSV/Excel files (detected
 #'   automatically).
-#' @param quiet Do not print the results (they are still returned).
-#' @return Invisibly, a data frame with one row per masked file: `report`,
+#' @param quiet Return the results invisibly, so that they are not printed.
+#' @return A data frame of class `surveyIDmasker_verify`, which prints as a
+#'   summary by report (`as.data.frame()` gives the plain table), with one
+#'   row per masked file: `report`,
 #'   `file`, `listed_as` (the name in the report), `renamed`,
 #'   `matches_report`, `timestamp` (`"valid"`, `"changed"`, `"invalid"`,
 #'   `"missing"` or `"none"`), `timestamped_at` and `masked_columns` (for
@@ -31,11 +33,19 @@
 #'                    quiet = TRUE)
 #' verify_report(res$output)
 #'
-#' # With a timestamp (needs an internet connection)
-#' # res <- mask_survey(study, columns = "suggested", timestamp = TRUE)
+#' \donttest{
+#' # With a timestamp of the report (needs an internet connection; without
+#' # one, everything is still saved and the report says so)
+#' res <- mask_survey(study, columns = "suggested", ip = "full", latlon = "full",
+#'                    key_file = res$key_file, timestamp = TRUE, overwrite = TRUE,
+#'                    quiet = TRUE)
+#' verify_report(res$output)
+#' }
 #' @export
 verify_report <- function(file, header_rows = NULL, quiet = FALSE) {
-  say <- function(...) if (!quiet) cat(...)
+  # The summary that the result prints as, built as cat() would write it.
+  buf <- character()
+  say <- function(..., sep = " ") buf <<- c(buf, paste(unlist(lapply(list(...), as.character)), collapse = sep))
   # Which files to check, grouped by report: each file's path, named by the
   # name the report lists it under ("" when no report lists it).
   groups <- list()
@@ -118,7 +128,8 @@ verify_report <- function(file, header_rows = NULL, quiet = FALSE) {
   }
   out <- do.call(rbind, rows)
   rownames(out) <- NULL
-  invisible(out)
+  out <- with_text(out, strsplit(paste(buf, collapse = ""), "\n")[[1]], "surveyIDmasker_verify")
+  if (quiet) invisible(out) else out
 }
 
 timestamp_text <- function(ts) {

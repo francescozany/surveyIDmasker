@@ -9,9 +9,10 @@
 #'   vector of such paths, or a folder.
 #' @param header_rows Number of header rows in CSV/Excel files (detected
 #'   automatically).
-#' @param quiet Do not print the findings (they are still returned).
-#' @return Invisibly, a data frame with one row per finding: `file`,
-#'   `column`, `issue` and `cells`.
+#' @param quiet Return the findings invisibly, so that they are not printed.
+#' @return A data frame with one row per finding: `file`, `column`, `issue`
+#'   and `cells`, of class `surveyIDmasker_check`. It prints as a summary of
+#'   each file (or sheet); `as.data.frame()` gives the plain table.
 #' @examples
 #' # A small made-up Qualtrics export that comes with the package,
 #' # copied to a temporary folder
@@ -26,7 +27,8 @@
 #' check_survey(res$output)   # after masking
 #' @export
 check_survey <- function(file, header_rows = NULL, quiet = FALSE) {
-  say <- function(...) if (!quiet) cat(...)
+  summary <- character()
+  say <- function(...) summary <<- c(summary, paste0(...))
   found <- list()
   for (f in expand_files(file)) {
     units <- read_units(f, header_rows)
@@ -42,13 +44,13 @@ check_survey <- function(file, header_rows = NULL, quiet = FALSE) {
         data.frame(column = text$column, issue = paste0(text$type, rep(" in text", nrow(text))),
                    cells = text$cells)
       )
-      say(sprintf("%s: %d rows, %d columns\n", unit_label(u), nrow(data), ncol(data)))
-      if (length(masked)) say("  Masked columns:", paste(masked, collapse = ", "), "\n")
+      say(sprintf("%s: %d rows, %d columns", unit_label(u), nrow(data), ncol(data)))
+      if (length(masked)) say("  Masked columns: ", paste(masked, collapse = ", "))
       if (nrow(rows)) {
-        say("  Still looks identifying:\n")
-        say(sprintf("    %-28s %-36s %d cell(s)\n", rows$column, rows$issue, rows$cells), sep = "")
+        say("  Still looks identifying:")
+        say(sprintf("    %-28s %-36s %d cell(s)", rows$column, rows$issue, rows$cells))
       } else {
-        say("  Nothing else that looks identifying was found.\n")
+        say("  Nothing else that looks identifying was found.")
       }
       if (nrow(rows)) found[[u]] <- cbind(file = unit_label(u), rows)
     }
@@ -56,7 +58,8 @@ check_survey <- function(file, header_rows = NULL, quiet = FALSE) {
   out <- if (length(found)) do.call(rbind, found) else
     data.frame(file = character(), column = character(), issue = character(), cells = numeric())
   rownames(out) <- NULL
-  invisible(out)
+  out <- with_text(out, summary, "surveyIDmasker_check")
+  if (quiet) invisible(out) else out
 }
 
 # A column made by mask_survey(): its filled cells are MSK codes.

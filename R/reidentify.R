@@ -16,7 +16,8 @@
 #' @param overwrite Replace an existing output file.
 #' @param header_rows Number of header rows in CSV/Excel files (detected
 #'   automatically).
-#' @param quiet Do not print what was done.
+#' @param quiet Do not show the messages about what was done (they can also
+#'   be silenced with [suppressMessages()]).
 #' @return Invisibly, a list with the re-identified `data` and the `output`
 #'   path. With several files, `data` is a list and `output` a vector, both
 #'   named by file. For an Excel file with several sheets, `data` is a list
@@ -47,7 +48,7 @@ reidentify <- function(file, key_file, output = NULL, overwrite = FALSE,
   if (!is.null(output)) stop("`output` can only be used with one file.", call. = FALSE)
   res <- list()
   for (f in files) {
-    if (!quiet) cat("\n", basename(f), ":\n", sep = "")
+    if (!quiet) message("\n", basename(f), ":")
     res[[f]] <- reidentify_one(f, key, NULL, overwrite, header_rows, quiet)
   }
   invisible(list(data = lapply(res, `[[`, "data"),
@@ -108,11 +109,11 @@ reidentify_one <- function(file, key, output, overwrite, header_rows, quiet = FA
   }
 
   if (length(units) > 1) write_workbook(units, out_path) else write_survey(units[[1]], out_path)
-  if (!quiet) cat(sprintf("Restored %d value(s) in %d column(s): %s\n", restored, length(changed),
-              paste(changed, collapse = ", ")))
+  if (!quiet) message(sprintf("Restored %d value(s) in %d column(s): %s", restored, length(changed),
+                             paste(changed, collapse = ", ")))
   if (unknown && !quiet) message("Note: ", unknown, " code(s) were not made with this key and were left unchanged.")
   if (!quiet) {
-    cat("Re-identified file: ", out_path, "\n", sep = "")
+    message("Re-identified file: ", out_path)
     message("This file contains identifiers again: keep it private.")
   }
   data <- lapply(units, `[[`, "data")

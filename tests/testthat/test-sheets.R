@@ -1,8 +1,8 @@
 test_that("every sheet of an Excel file is masked, with one key", {
   dir <- withr_tempdir()
   wb <- fake_workbook(dir)
-  expect_output(res <- mask_survey(wb, columns = "suggested", ip = "full", mask_text = TRUE),
-                "4 sheets")
+  expect_message(res <- mask_survey(wb, columns = "suggested", ip = "full", mask_text = TRUE),
+                 "4 sheets")
   expect_length(res$output, 1)
   expect_equal(readxl::excel_sheets(res$output), c("Data", "Pilot", "Notes", "Empty"))
   data <- read_survey(res$output, sheet = "Data")
@@ -69,7 +69,7 @@ test_that("columns can be given by sheet, and a sheet left out is not masked", {
 test_that("the repeat command gives the same masking for a workbook", {
   dir <- withr_tempdir()
   wb <- fake_workbook(dir)
-  out <- capture.output(res <- mask_survey(wb, columns = list("study.xlsx [Data]" = c("PROLIFIC_PID", "IPAddress"),
+  out <- capture_all(res <- mask_survey(wb, columns = list("study.xlsx [Data]" = c("PROLIFIC_PID", "IPAddress"),
                                                               "study.xlsx [Pilot]" = "workerId"), ip = "full"))
   cmd <- paste(out[seq(grep("To repeat", out) + 1, length(out))], collapse = "\n")
   expect_match(cmd, "study.xlsx [Pilot]", fixed = TRUE)
@@ -90,11 +90,12 @@ test_that("the guided mode asks for the columns of each sheet", {
       a
     })
   dir <- withr_tempdir()
-  out <- capture.output(res <- mask_survey(fake_workbook(dir), ip = "full", mask_text = FALSE))
+  out <- capture_all(res <- mask_survey(fake_workbook(dir), ip = "full", mask_text = FALSE))
   expect_length(answers, 0)
   expect_true(any(grepl("Sheet 1 of 4: study.xlsx [Data]", out, fixed = TRUE)))
   expect_true(any(grepl("Sheet 3 of 4: study.xlsx [Notes]", out, fixed = TRUE)))
-  expect_false(any(grepl("study.xlsx [Empty]", out, fixed = TRUE)))
+  # No question for the empty sheet.
+  expect_false(any(grepl("Sheet 4 of 4", out, fixed = TRUE)))
   expect_equal(readxl::excel_sheets(res$output), c("Data", "Pilot", "Notes", "Empty"))
 })
 

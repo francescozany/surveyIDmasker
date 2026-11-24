@@ -73,8 +73,9 @@ the report and shows that the report, and the masked files whose
 fingerprints it lists, have not changed since; check it with
 \code{\link[=verify_report]{verify_report()}}. In the guided mode you are asked.}
 
-\item{quiet}{Do not print what was done (questions in the guided mode are
-still asked).}
+\item{quiet}{Do not show the messages about what was done (they can also
+be silenced with \code{\link[=suppressMessages]{suppressMessages()}}). Questions in the guided mode are
+still asked.}
 }
 \value{
 Invisibly, a list with the masked \code{data} and the paths of the
@@ -139,6 +140,10 @@ read_survey(res$output)$data[, c("IPAddress", "LocationLatitude", "PROLIFIC_PID"
 # Guided: choose the file(s) and answer a few questions
 if (interactive()) mask_survey()
 
-# Several files with one key and one report, e.g.
-# mask_survey(c("study1.csv", "study2.sav"), columns = "suggested")
+# Several files with one key and one report: here, all the files of a folder
+studies <- tempfile("studies")
+dir.create(studies)
+file.copy(rep(study, 2), file.path(studies, c("study1.csv", "study2.csv")))
+both <- mask_survey(studies, columns = "suggested", ip = "full", latlon = "full")
+basename(both$output)
 }

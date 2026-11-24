@@ -28,7 +28,8 @@ paths, or a folder (all masked files in it).}
 \item{header_rows}{Number of header rows in CSV/Excel files (detected
 automatically).}
 
-\item{quiet}{Do not print what was done.}
+\item{quiet}{Do not show the messages about what was done (they can also
+be silenced with \code{\link[=suppressMessages]{suppressMessages()}}).}
 }
 \value{
 Invisibly, a list with the re-identified \code{data} and the \code{output}

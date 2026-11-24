@@ -15,10 +15,12 @@ masked file that was only renamed is recognized by its content.}
 \item{header_rows}{Number of header rows in CSV/Excel files (detected
 automatically).}
 
-\item{quiet}{Do not print the results (they are still returned).}
+\item{quiet}{Return the results invisibly, so that they are not printed.}
 }
 \value{
-Invisibly, a data frame with one row per masked file: \code{report},
+A data frame of class \code{surveyIDmasker_verify}, which prints as a
+summary by report (\code{as.data.frame()} gives the plain table), with one
+row per masked file: \code{report},
 \code{file}, \code{listed_as} (the name in the report), \code{renamed},
 \code{matches_report}, \code{timestamp} (\code{"valid"}, \code{"changed"}, \code{"invalid"},
 \code{"missing"} or \code{"none"}), \code{timestamped_at} and \code{masked_columns} (for
@@ -43,6 +45,12 @@ res <- mask_survey(study, columns = "suggested", ip = "full", latlon = "full",
                    quiet = TRUE)
 verify_report(res$output)
 
-# With a timestamp (needs an internet connection)
-# res <- mask_survey(study, columns = "suggested", timestamp = TRUE)
+\donttest{
+# With a timestamp of the report (needs an internet connection; without
+# one, everything is still saved and the report says so)
+res <- mask_survey(study, columns = "suggested", ip = "full", latlon = "full",
+                   key_file = res$key_file, timestamp = TRUE, overwrite = TRUE,
+                   quiet = TRUE)
+verify_report(res$output)
+}
 }

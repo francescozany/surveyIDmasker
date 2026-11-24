@@ -80,8 +80,9 @@
 #'   the report and shows that the report, and the masked files whose
 #'   fingerprints it lists, have not changed since; check it with
 #'   [verify_report()]. In the guided mode you are asked.
-#' @param quiet Do not print what was done (questions in the guided mode are
-#'   still asked).
+#' @param quiet Do not show the messages about what was done (they can also
+#'   be silenced with [suppressMessages()]). Questions in the guided mode are
+#'   still asked.
 #' @return Invisibly, a list with the masked `data` and the paths of the
 #'   `output`, the `report` and the `key_file`, and `timestamped` (`TRUE` when
 #'   the report was timestamped). With several files, `data` is
@@ -101,8 +102,12 @@
 #' # Guided: choose the file(s) and answer a few questions
 #' if (interactive()) mask_survey()
 #'
-#' # Several files with one key and one report, e.g.
-#' # mask_survey(c("study1.csv", "study2.sav"), columns = "suggested")
+#' # Several files with one key and one report: here, all the files of a folder
+#' studies <- tempfile("studies")
+#' dir.create(studies)
+#' file.copy(rep(study, 2), file.path(studies, c("study1.csv", "study2.csv")))
+#' both <- mask_survey(studies, columns = "suggested", ip = "full", latlon = "full")
+#' basename(both$output)
 #' @export
 mask_survey <- function(file = NULL, columns = NULL, ip = NULL, latlon = NULL,
                            ip_db = NULL, key_file = NULL,
@@ -111,7 +116,9 @@ mask_survey <- function(file = NULL, columns = NULL, ip = NULL, latlon = NULL,
                            header_rows = NULL, timestamp = FALSE, quiet = FALSE) {
   ask <- is_interactive()
   guided <- ask && (is.null(file) || is.null(columns))
-  say <- function(...) if (!quiet) cat(...)
+  # What is done is written as messages (quiet = TRUE or suppressMessages()
+  # silence them); only the questions of the guided mode use cat().
+  say <- function(..., sep = " ") if (!quiet) say_msg(..., sep = sep)
   tell <- function(...) if (!quiet) message(...)
   if (guided) {
     if (is.null(file)) say("You can mask one file, or several files using the same key (select them together).\n")
@@ -159,9 +166,9 @@ mask_survey <- function(file = NULL, columns = NULL, ip = NULL, latlon = NULL,
       say("\n", rule(sprintf("%s %d of %d: %s", what, i, n, unit_label(paths[i]))), "\n", sep = "")
     }
     sel <- if (is.null(columns)) {
-      choose_columns(data, ask, multi)
+      choose_columns(data, ask, multi, quiet)
     } else {
-      batch_columns(data, columns_for(columns, paths[i], paths), multi, unit_label(paths[i]))
+      batch_columns(data, columns_for(columns, paths[i], paths), multi, unit_label(paths[i]), quiet)
     }
     if (length(sel)) cols[[paths[i]]] <- sel else skipped <- c(skipped, paths[i])
   }
@@ -188,8 +195,8 @@ mask_survey <- function(file = NULL, columns = NULL, ip = NULL, latlon = NULL,
       } else paste("IP addresses and locations:", paste(unit_label(undecided), collapse = ", "))
       say("\n", rule(title), "\n", sep = "")
     }
-    if (anyNA(latlon_of)) latlon_of[is.na(latlon_of)] <- choose_mode(NULL, "latitude/longitude", ask)
-    if (anyNA(ip_of)) ip_of[is.na(ip_of)] <- choose_mode(NULL, "IP addresses", ask)
+    if (anyNA(latlon_of)) latlon_of[is.na(latlon_of)] <- choose_mode(NULL, "latitude/longitude", ask, quiet)
+    if (anyNA(ip_of)) ip_of[is.na(ip_of)] <- choose_mode(NULL, "IP addresses", ask, quiet)
   }
   if (any(ip_of == "country_state") && is.null(ip_db)) {
     ip_db <- choose_ip_db(ask)
@@ -262,7 +269,7 @@ mask_survey <- function(file = NULL, columns = NULL, ip = NULL, latlon = NULL,
   # before anything is saved, and the user decides whether to replace them.
   found <- Filter(function(r) !is.null(r$text_found) && nrow(r$text_found) > 0, results)
   if (guided && missing(mask_text) && length(found)) {
-    mask_text <- choose_mask_text(found, multi)
+    mask_text <- choose_mask_text(found)
     if (mask_text) {
       for (p in names(found)) results[[p]] <- mask_found_text(results[[p]], cb, originals)
     }
@@ -464,15 +471,16 @@ modes_by_file <- function(value, applies, paths, name) {
 }
 
 # Guided choice of the files: one or several, selected in one file window.
+# The guided mode (interactive sessions only) writes its questions with cat().
 choose_files <- function(header_rows) {
   files <- list()
   for (f in unique(normalizePath(pick_files(), mustWork = FALSE))) {
     units <- tryCatch(read_units(f, header_rows), error = function(e) {
-      cat("Could not read ", basename(f), ": ", conditionMessage(e), "\n", sep = "")
+      message("Could not read ", basename(f), ": ", conditionMessage(e))
       NULL
     })
     if (is.null(units)) next
-    cat("Read ", units_summary(units), ".\n", sep = "")
+    message("Read ", units_summary(units), ".")
     files <- c(files, units)
   }
   if (!length(files)) stop("None of the chosen files could be read.", call. = FALSE)
@@ -581,17 +589,18 @@ part_names <- function(part) slash_path(unique(c(part, basename(part), unit_file
 
 # With several files a file without the given columns, or without suggested
 # ones, is left out (and listed in the report) instead of stopping everything.
-batch_columns <- function(data, columns, batch, name) {
+batch_columns <- function(data, columns, batch, name, quiet = FALSE) {
+  tell <- function(...) if (!quiet) message(...)
   if (!batch) return(resolve_columns(data, columns))
   if (identical(columns, "suggested")) {
     found <- suggest_id_columns(data)$column
-    if (!length(found)) message("No identifier columns found in ", name, ": it will not be masked.")
+    if (!length(found)) tell("No identifier columns found in ", name, ": it will not be masked.")
     return(found)
   }
   if (is.numeric(columns)) return(resolve_columns(data, columns))
   missing <- setdiff(columns, names(data))
-  if (length(missing)) message("Not in ", name, ": ", paste(missing, collapse = ", "))
-  if (length(missing) == length(unique(columns))) message(name, " will not be masked.")
+  if (length(missing)) tell("Not in ", name, ": ", paste(missing, collapse = ", "))
+  if (length(missing) == length(unique(columns))) tell(name, " will not be masked.")
   intersect(unique(columns), names(data))
 }
 
@@ -611,17 +620,18 @@ lat_tag <- "\037a"
 lon_tag <- "\037o"
 
 # In a batch (`batch = TRUE`) a file can be skipped: it is then left out.
-choose_columns <- function(data, ask, batch = FALSE) {
+choose_columns <- function(data, ask, batch = FALSE, quiet = FALSE) {
+  tell <- function(...) if (!quiet) message(...)
   found <- suggest_id_columns(data, include_empty = TRUE)
   sugg <- found[!found$empty, ]
   empty <- found$column[found$empty]
   if (!ask) {
     if (!nrow(sugg) && batch) {
-      message("No identifier columns found: this file will not be masked.")
+      tell("No identifier columns found: this file will not be masked.")
       return(character())
     }
     if (!nrow(sugg)) stop("No identifier columns with data were found. Pass them with `columns =`.")
-    message("Masking the suggested columns: ", paste(sugg$column, collapse = ", "))
+    tell("Masking the suggested columns: ", paste(sugg$column, collapse = ", "))
     return(sugg$column)
   }
   cols <- names(data)
@@ -822,8 +832,9 @@ column_kind <- function(col, values) {
 #' @param file Path to a survey data file (.csv, .sav, .dta or .xlsx).
 #' @param sheet For Excel files, the sheet (name or number). The first one by
 #'   default.
-#' @return Invisibly, a data frame with `number`, `column`, `suggested` and
-#'   `empty`.
+#' @return A data frame with `number`, `column`, `suggested` and `empty`,
+#'   of class `surveyIDmasker_columns`: it prints as the numbered list of
+#'   columns.
 #' @examples
 #' example <- system.file("extdata", "example_survey.csv", package = "surveyIDmasker")
 #' list_columns(example)
@@ -831,16 +842,17 @@ column_kind <- function(col, values) {
 list_columns <- function(file, sheet = 1) {
   x <- read_survey(file, sheet = sheet)
   data <- x$data
+  text <- character()
   if (tolower(tools::file_ext(file)) == "xlsx" && length(readxl::excel_sheets(file)) > 1) {
-    cat("Sheet \"", x$sheet, "\" (other sheets: list_columns(file, sheet = ...)):\n", sep = "")
+    text <- paste0("Sheet \"", x$sheet, "\" (other sheets: list_columns(file, sheet = ...)):")
   }
   found <- suggest_id_columns(data, include_empty = TRUE)
   empty <- found$column[found$empty]
   out <- data.frame(number = seq_along(data), column = names(data),
                     suggested = names(data) %in% found$column[!found$empty],
                     empty = names(data) %in% empty)
-  if (ncol(data)) cat(format_columns(column_labels(out$column, found$column[!found$empty], empty)), sep = "\n")
-  invisible(out)
+  if (ncol(data)) text <- c(text, format_columns(column_labels(out$column, found$column[!found$empty], empty)))
+  with_text(out, text, "surveyIDmasker_columns")
 }
 
 resolve_columns <- function(data, columns) {
@@ -865,10 +877,10 @@ resolve_columns <- function(data, columns) {
   unique(columns)
 }
 
-choose_mode <- function(mode, what, ask) {
+choose_mode <- function(mode, what, ask, quiet = FALSE) {
   if (!is.null(mode)) return(mode)
   if (!ask) {
-    message("Masking ", what, " fully (set it with ", if (what == "IP addresses") "ip" else "latlon", " = ).")
+    if (!quiet) message("Masking ", what, " fully (set it with ", if (what == "IP addresses") "ip" else "latlon", " = ).")
     return("full")
   }
   choice <- ask_choice(paste0("How should ", what, " be masked?"),
@@ -909,15 +921,19 @@ found_lines <- function(tf, pad = "") {
 
 # Lists the identifiers found inside other columns and asks whether to replace
 # them. `found` holds the results of mask_one() that have any, named by file.
-choose_mask_text <- function(found, batch) {
-  cat("\nFound in other columns, before saving:\n")
+choose_mask_text <- function(found) {
+  several <- length(unique(unit_file(names(found)))) > 1
+  cat("\nSome identifiers also appear in the following ", if (several) "files" else "file",
+      ",\nin columns that are not being masked (for example, a worker ID\ntyped into a text answer):\n\n",
+      sep = "")
   for (p in names(found)) {
-    tf <- found[[p]]$text_found
-    if (batch) cat("  ", basename(p), "\n", sep = "")
-    cat(paste0(found_lines(tf, if (batch) "  " else ""), "\n"), sep = "")
+    cat("  ", basename(p), "\n", sep = "")
+    cat(paste0(found_lines(found[[p]]$text_found, "  "), "\n"), sep = "")
   }
+  cat("\nReplace them with the same codes as in the masked columns?\n",
+      "  y = replace them   n = leave them as they are (they will be listed in the report)\n", sep = "")
   repeat {
-    ans <- tolower(ask_line("Replace these with their codes? [Y/n, or q to exit] "))
+    ans <- tolower(ask_line("[Y/n, or q to exit] "))
     if (ans %in% c("", "y", "yes")) return(TRUE)
     if (ans %in% c("n", "no")) return(FALSE)
     cat("Please type y or n (or q to exit).\n")

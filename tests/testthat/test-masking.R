@@ -84,7 +84,8 @@ test_that("list_columns marks empty identifier columns", {
   path <- file.path(dir, "empty.csv")
   writeLines(c("StartDate,IPAddress,Q1", "Start Date,IP Address,Question",
                "2026-01-01,,yes"), path)
-  out <- capture.output(cols <- list_columns(path))
+  cols <- list_columns(path)
+  out <- capture.output(print(cols))
   expect_true(any(grepl("\\* +2 IPAddress \\(empty\\)", out)))
   expect_equal(cols$empty, c(FALSE, TRUE, FALSE))
   expect_error(mask_survey(path, columns = "suggested"), "No identifier")
@@ -346,7 +347,7 @@ test_that("several files picked in one dialog are all read", {
   bad <- file.path(dir, "notes.csv")
   writeLines(character(), bad)
   local_mocked_bindings(pick_files = function() c(a, b, bad, a))
-  out <- capture.output(files <- choose_files(NULL))
+  out <- capture_all(files <- choose_files(NULL))
   expect_equal(basename(names(files)), c("study.csv", "lab.csv"))
   expect_true(any(grepl("Could not read notes.csv", out)))
 })
@@ -533,13 +534,15 @@ test_that("check_survey lists what is still identifying, and nothing in a clean 
   dir <- withr_tempdir()
   path <- fake_export(dir)
   res <- mask_survey(path, columns = c("PROLIFIC_PID", "IPAddress"), scan_text = FALSE)
-  out <- capture.output(found <- check_survey(res$output))
+  found <- check_survey(res$output)
+  out <- capture.output(print(found))
   expect_true(any(grepl("Masked columns: IPAddress, PROLIFIC_PID", out)))
   expect_setequal(found$column, c("LocationLatitude", "LocationLongitude", "participantId", "comment"))
   expect_equal(found$issue[found$column == "comment"], "Prolific ID in text")
   res2 <- mask_survey(path, columns = "suggested", ip = "full", latlon = "full", mask_text = TRUE,
                       key_file = res$key_file, overwrite = TRUE)
-  out <- capture.output(found <- check_survey(res2$output))
+  found <- check_survey(res2$output)
+  out <- capture.output(print(found))
   expect_equal(nrow(found), 0)
   expect_true(any(grepl("Nothing else", out)))
 })
@@ -573,13 +576,13 @@ test_that("the guided mode shows identifiers found in other columns before savin
         a
       })
     dir <- withr_tempdir()
-    out <- capture.output(res <- mask_survey(fake_export(dir), ip = "full", latlon = "full"))
+    out <- capture_all(res <- mask_survey(fake_export(dir), ip = "full", latlon = "full"))
     list(res = res, out = out, left = answers)
   }
   # Columns: Enter; timestamp: n; replace in text: Enter (yes)
   run <- guided_run(c("", "n", ""))
   expect_length(run$left, 0)
-  expect_true(any(grepl("Found in other columns, before saving", run$out)))
+  expect_true(any(grepl("Some identifiers also appear in the following file,", run$out, fixed = TRUE)))
   # Rows as in the file: the first response is below the 3 header rows.
   expect_true(any(grepl("comment +Prolific ID +1 cell\\(s\\): row 4$", run$out)))
   expect_true(any(grepl("comment +Prolific ID +1 cell\\(s\\): row 4$", readLines(run$res$report))))
@@ -587,12 +590,13 @@ test_that("the guided mode shows identifiers found in other columns before savin
   expect_true(any(grepl("\\(masked\\)", readLines(run$res$report))))
   expect_true(any(grepl("mask_text = TRUE", run$out)))
   # The question comes before anything is written.
-  expect_lt(grep("before saving", run$out)[1], grep("^Masked file:", run$out)[1])
+  expect_lt(grep("Some identifiers also appear", run$out)[1], grep("^Masked file:", run$out)[1])
 
   run <- guided_run(c("", "n", "n"))
   expect_true(any(grepl("5f1a2b3c4d5e6f7a8b9c0d1e", read_survey(run$res$output)$data$comment)))
   expect_true(any(grepl("NOT masked", readLines(run$res$report))))
-  expect_false(any(grepl("mask_text = TRUE", run$out)))
+  # The repeat command at the end has no mask_text = TRUE.
+  expect_false(any(grepl("^ +mask_text = TRUE", run$out)))
 })
 
 test_that("mask_text = TRUE and replacing after the question give the same file", {

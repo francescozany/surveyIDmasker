@@ -101,7 +101,7 @@ test_that("verify_report finds edits to the masked file, the report, or a missin
   expect_equal(res$timestamp, "valid")
   expect_equal(res$masked_columns, "IPAddress, LocationLatitude, LocationLongitude, PROLIFIC_PID")
   expect_equal(verify_report(x$report, quiet = TRUE)$matches_report, TRUE)
-  expect_output(verify_report(x$file), "valid. The report has not changed since")
+  expect_output(print(verify_report(x$file)), "valid. The report has not changed since")
 
   lines <- readLines(x$file)
   lines[4] <- sub("MSK", "MSX", lines[4])
@@ -109,18 +109,18 @@ test_that("verify_report finds edits to the masked file, the report, or a missin
   res <- verify_report(x$file, quiet = TRUE)
   expect_false(res$matches_report)
   expect_equal(res$timestamp, "valid")
-  expect_output(verify_report(x$file), "NO, the file was changed")
+  expect_output(print(verify_report(x$file)), "NO, the file was changed")
 
   original <- readLines(x$report)
   lines <- original
   lines[grepl("^Rows", lines)] <- "Rows: 6"
   writeLines(lines, x$report)
   expect_equal(verify_report(x$file, quiet = TRUE)$timestamp, "changed")
-  expect_output(verify_report(x$file), "THE REPORT WAS CHANGED")
+  expect_output(print(verify_report(x$file)), "THE REPORT WAS CHANGED")
 
   replace_token(x$report, NULL)
   expect_equal(verify_report(x$file, quiet = TRUE)$timestamp, "missing")
-  expect_output(verify_report(x$file), "timestamp at its end was removed")
+  expect_output(print(verify_report(x$file)), "timestamp at its end was removed")
 })
 
 test_that("a renamed copy of a report is recognized", {
@@ -152,7 +152,7 @@ test_that("a masked file that was only renamed is recognized by its content", {
     expect_true(res$matches_report)
     expect_equal(res$timestamp, "valid")
   }
-  expect_output(verify_report(new), "yes, only the file name changed")
+  expect_output(print(verify_report(new)), "yes, only the file name changed")
   # Renamed and changed: nothing connects it to the report anymore.
   lines <- readLines(new)
   lines[4] <- sub("MSK", "MSX", lines[4])
@@ -160,7 +160,7 @@ test_that("a masked file that was only renamed is recognized by its content", {
   expect_true(is.na(verify_report(new, quiet = TRUE)$report))
   res <- verify_report(x$report, quiet = TRUE)
   expect_true(is.na(res$matches_report))
-  expect_output(verify_report(x$report), "file not found")
+  expect_output(print(verify_report(x$report)), "file not found")
 })
 
 test_that("a report whose fingerprint line was damaged still lists the file", {
@@ -172,7 +172,7 @@ test_that("a report whose fingerprint line was damaged still lists the file", {
   expect_equal(res$file, basename(x$file))
   expect_true(is.na(res$matches_report))
   expect_equal(res$timestamp, "changed")
-  expect_output(verify_report(x$report), "cannot tell")
+  expect_output(print(verify_report(x$report)), "cannot tell")
 })
 
 test_that("text added after the timestamp is a change, and its fingerprints are not used", {

@@ -13,8 +13,9 @@ list_columns(file, sheet = 1)
 default.}
 }
 \value{
-Invisibly, a data frame with \code{number}, \code{column}, \code{suggested} and
-\code{empty}.
+A data frame with \code{number}, \code{column}, \code{suggested} and \code{empty},
+of class \code{surveyIDmasker_columns}: it prints as the numbered list of
+columns.
 }
 \description{
 Use the numbers in \code{mask_survey(columns = ...)}. Suggested identifier

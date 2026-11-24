@@ -13,11 +13,12 @@ vector of such paths, or a folder.}
 \item{header_rows}{Number of header rows in CSV/Excel files (detected
 automatically).}
 
-\item{quiet}{Do not print the findings (they are still returned).}
+\item{quiet}{Return the findings invisibly, so that they are not printed.}
 }
 \value{
-Invisibly, a data frame with one row per finding: \code{file},
-\code{column}, \code{issue} and \code{cells}.
+A data frame with one row per finding: \code{file}, \code{column}, \code{issue}
+and \code{cells}, of class \code{surveyIDmasker_check}. It prints as a summary of
+each file (or sheet); \code{as.data.frame()} gives the plain table.
 }
 \description{
 Lists what still looks identifying in a survey file (e.g. a masked file

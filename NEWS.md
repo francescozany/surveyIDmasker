@@ -1,4 +1,13 @@
-# surveyIDmasker (development version)
+# surveyIDmasker 0.3.2
+
+* Console output follows CRAN's guidelines. What `mask_survey()` and
+  `reidentify()` do is shown as messages, which `quiet = TRUE` or
+  `suppressMessages()` silence; only the questions of the guided mode are
+  printed. `verify_report()`, `check_survey()` and `list_columns()` return
+  their results, which print as before when shown (`x <- verify_report(f)`
+  shows nothing; `x` shows the summary; `as.data.frame(x)` gives the plain
+  table). `quiet = TRUE` now also silences the notes that were shown before
+  even with it (e.g. "Masking the suggested columns").
 
 * `mask_survey(timestamp = TRUE)` gets an independent timestamp of the report
   from a public timestamping service (RFC 3161; Sectigo, or DigiCert if
